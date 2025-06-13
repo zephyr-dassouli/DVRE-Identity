@@ -7,8 +7,6 @@ import GroupABI from "../abis/Group.json";
 
 const GROUP_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_GROUP_FACTORY_ADDRESS!;
 
-console.log("Factory address:", GROUP_FACTORY_ADDRESS);
-
 type Group = {
   address: string;
   name: string;

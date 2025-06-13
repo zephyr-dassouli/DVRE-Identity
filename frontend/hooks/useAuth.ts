@@ -5,8 +5,10 @@ import { ethers } from "ethers";
 
 import GroupFactory from "../abis/GroupFactory.json";
 import Group from "../abis/Group.json";
+import UserMetadataFactory from "../abis/UserMetadataFactory.json";
 
 const GROUP_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_GROUP_FACTORY_ADDRESS!;
+const USER_METADATA_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_USER_METADATA_FACTORY_ADDRESS!;
 
 export function useAuth() {
   const [account, setAccount] = useState<string | null>(null);
@@ -58,5 +60,29 @@ export function useAuth() {
     sessionStorage.removeItem("auth");
   };
 
-  return { account, groups, connect, disconnect };
+  // Register user on the blockchain
+  const register = async (email: string, name: string, institution: string) => {
+    if (!(window as any).ethereum) return;
+
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    const signer = await provider.getSigner();
+
+    const userMetadataFactory = new ethers.Contract(
+      USER_METADATA_FACTORY_ADDRESS,
+      UserMetadataFactory.abi,
+      signer
+    );
+
+    try {
+      const tx = await userMetadataFactory.registerUser(email, name, institution);
+      await tx.wait();
+      // Optionally, you can refresh or fetch user metadata here
+      return true;
+    } catch (err) {
+      console.error("Registration failed:", err);
+      return false;
+    }
+  };
+
+  return { account, groups, connect, disconnect, register };
 }
