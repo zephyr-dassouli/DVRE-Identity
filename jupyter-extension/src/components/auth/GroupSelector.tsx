@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import AssignGroupMemberForm from "./AssignGroupMemberForm";
-import GroupFactoryABI from "../abis/GroupFactory.json";
-import GroupABI from "../abis/Group.json";
+import GroupFactoryABI from "../../abis/GroupFactory.json";
+import GroupABI from "../../abis/Group.json";
+import React from "react";
 
-const GROUP_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_GROUP_FACTORY_ADDRESS!;
+const GROUP_FACTORY_ADDRESS = "0xf6ca29094e6b71fdead291dbceaab107e7f243e8";
 
 type Group = {
   address: string;
@@ -14,7 +15,6 @@ type Group = {
 const GroupSelector = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selected, setSelected] = useState<Group | undefined>();
-
 
   useEffect(() => {
     const loadGroups = async () => {
@@ -30,7 +30,7 @@ const GroupSelector = () => {
           groupAddresses.map(async (addr) => {
             try {
               const groupContract = new ethers.Contract(addr, GroupABI.abi, provider);
-              const name = await groupContract.name(); // Assumes Group.sol has `string public name;`
+              const name = await groupContract.name();
               return { address: addr, name };
             } catch {
               return { address: addr, name: "Unnamed Group" };
@@ -54,11 +54,32 @@ const GroupSelector = () => {
   };
 
   return (
-    <div className="w-[400px] flex flex-col items-center justify-center p-4 gap-4 border border-border rounded">
-
-      <p>Select a group:</p>
-      <select className="w-full bg-background rounded border border-border" value={selected?.address} onChange={handleChange}>
-        <option className="rounded" value="">- Choose a group -</option>
+    <div style={{
+      width: '400px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '16px',
+      gap: '16px',
+      border: '1px solid var(--jp-border-color1)',
+      borderRadius: '4px',
+      backgroundColor: 'var(--jp-layout-color1)'
+    }}>
+      <p style={{ color: 'var(--jp-ui-font-color1)' }}>Select a group:</p>
+      <select 
+        style={{
+          width: '100%',
+          backgroundColor: 'var(--jp-layout-color0)',
+          borderRadius: '4px',
+          border: '1px solid var(--jp-border-color1)',
+          padding: '8px',
+          color: 'var(--jp-ui-font-color1)'
+        }}
+        value={selected?.address} 
+        onChange={handleChange}
+      >
+        <option style={{ borderRadius: '4px' }} value="">- Choose a group -</option>
         {groups.map((group) => (
           <option key={group.address} value={group.address}>
             {group.name}
@@ -68,7 +89,9 @@ const GroupSelector = () => {
 
       {selected && (
         <>
-          <h2><span className=" font-bold">Selected Group:</span> {selected.name}</h2>
+          <h2 style={{ color: 'var(--jp-ui-font-color1)' }}>
+            <span style={{ fontWeight: 'bold' }}>Selected Group:</span> {selected.name}
+          </h2>
           <AssignGroupMemberForm groupAddress={selected.address} />
         </>
       )}
