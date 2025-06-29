@@ -3,22 +3,22 @@
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 
-import GroupFactory from "../abis/GroupFactory.json";
-import Group from "../abis/Group.json";
+import ProjectFactory from "../abis/ProjectFactory.json";
+import Project from "../abis/Project.json";
 import UserMetadataFactory from "../abis/UserMetadataFactory.json";
 import { CONTRACT_ADDRESSES } from "../config/contracts";
 
 export function useAuth() {
   const [account, setAccount] = useState<string | null>(null);
-  const [groups, setGroups] = useState<{ address: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<{ address: string; name: string }[]>([]);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("auth");
     if (stored) {
-      const { account, groups } = JSON.parse(stored);
+      const { account, projects } = JSON.parse(stored);
       setAccount(account);
-      setGroups(groups);
-      console.log("Restored session:", { account, groups });
+      setProjects(projects);
+      console.log("Restored session:", { account, projects });
     }
   }, []);
 
@@ -29,32 +29,32 @@ export function useAuth() {
     const signer = await provider.getSigner();
     const addr = await signer.getAddress();
 
-    const factoryContract = new ethers.Contract(CONTRACT_ADDRESSES.GROUP_FACTORY_ADDRESS, GroupFactory.abi, provider);
-    const groupAddresses: string[] = await factoryContract.getAllGroups();
+    const factoryContract = new ethers.Contract(CONTRACT_ADDRESSES.PROJECT_FACTORY_ADDRESS, ProjectFactory.abi, provider);
+    const projectAddresses: string[] = await factoryContract.getAllProjects();
 
-    const groupDetails: { address: string; name: string }[] = [];
+    const projectDetails: { address: string; name: string }[] = [];
 
-    for (const groupAddr of groupAddresses) {
-      const groupContract = new ethers.Contract(groupAddr, Group.abi, provider);
+    for (const projectAddr of projectAddresses) {
+      const projectContract = new ethers.Contract(projectAddr, Project.abi, provider);
       try {
-        const isMember = await groupContract.isUserMember(addr);
+        const isMember = await projectContract.isMember(addr);
         if (isMember) {
-          const name = await groupContract.name();
-          groupDetails.push({ address: groupAddr, name });
+          const name = await projectContract.getName(); // This returns the objective which serves as the project name
+          projectDetails.push({ address: projectAddr, name });
         }
       } catch (err) {
-        console.warn(`Error checking group ${groupAddr}`, err);
+        console.warn(`Error checking project ${projectAddr}`, err);
       }
     }
 
     setAccount(addr);
-    setGroups(groupDetails);
-    sessionStorage.setItem("auth", JSON.stringify({ account: addr, groups: groupDetails }));
+    setProjects(projectDetails);
+    sessionStorage.setItem("auth", JSON.stringify({ account: addr, projects: projectDetails }));
   };
 
   const disconnect = () => {
     setAccount(null);
-    setGroups([]);
+    setProjects([]);
     sessionStorage.removeItem("auth");
   };
 
@@ -82,5 +82,5 @@ export function useAuth() {
     }
   };
 
-  return { account, groups, connect, disconnect, register };
+  return { account, projects, connect, disconnect, register };
 }

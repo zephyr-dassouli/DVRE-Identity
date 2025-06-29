@@ -9,7 +9,7 @@ import React from "react";
 import { CONTRACT_ADDRESSES } from "../../config/contracts"; // Adjust the import path as necessary
 
 export default function WalletButton({ setUserAccount }: { setUserAccount: (account: string | null) => void }) {
-  const { account, groups, connect, disconnect, register } = useAuth();
+  const { account, projects, connect, disconnect, register } = useAuth();
 
   const [metadata, setMetadata] = useState<{ email: string; name: string; institution: string } | null>(null);
   const [showRegister, setShowRegister] = useState(false);
@@ -74,8 +74,8 @@ export default function WalletButton({ setUserAccount }: { setUserAccount: (acco
             <UserMetadataForm onRegister={handleRegister} />
           ) : null}
           <div>
-            <p style={{ fontWeight: 'bold' }}>Groups:</p>
-            {groups.length > 0 ? (
+            <p style={{ fontWeight: 'bold' }}>My Projects:</p>
+            {projects.length > 0 ? (
               <ul style={{
                 backgroundColor: 'var(--jp-layout-color1)',
                 padding: '8px',
@@ -86,14 +86,25 @@ export default function WalletButton({ setUserAccount }: { setUserAccount: (acco
                 listStyle: 'none',
                 margin: 0
               }}>
-                {groups.map(({ address, name }) => (
-                  <li key={address}>
-                    {name}
+                {projects.map(({ address, name }) => (
+                  <li key={address} style={{
+                    padding: '4px 0',
+                    borderBottom: '1px solid var(--jp-border-color2)',
+                    fontSize: '12px'
+                  }}>
+                    <div style={{ fontWeight: 'bold', color: 'var(--jp-ui-font-color1)' }}>
+                      {name}
+                    </div>
+                    <div style={{ color: 'var(--jp-ui-font-color2)', fontSize: '10px' }}>
+                      {address.slice(0, 6)}...{address.slice(-4)}
+                    </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p>No group memberships found</p>
+              <p style={{ color: 'var(--jp-ui-font-color2)', fontSize: '12px' }}>
+                No project memberships found
+              </p>
             )}
           </div>
           <button

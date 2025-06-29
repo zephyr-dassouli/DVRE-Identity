@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import WalletButton from './auth/WalletButton';
+import WalletButton from '../auth/WalletButton';
 
 
 interface AuthComponentProps {
