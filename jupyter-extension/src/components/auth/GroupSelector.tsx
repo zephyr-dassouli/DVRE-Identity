@@ -4,8 +4,7 @@ import AssignGroupMemberForm from "./AssignGroupMemberForm";
 import GroupFactoryABI from "../../abis/GroupFactory.json";
 import GroupABI from "../../abis/Group.json";
 import React from "react";
-
-const GROUP_FACTORY_ADDRESS = "0xf6ca29094e6b71fdead291dbceaab107e7f243e8";
+import { CONTRACT_ADDRESSES } from "../../config/contracts"; // Adjust the import path as necessary
 
 type Group = {
   address: string;
@@ -21,7 +20,7 @@ const GroupSelector = () => {
       if (!(window as any).ethereum) return;
 
       const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const factory = new ethers.Contract(GROUP_FACTORY_ADDRESS, GroupFactoryABI.abi, provider);
+      const factory = new ethers.Contract(CONTRACT_ADDRESSES.GROUP_FACTORY_ADDRESS, GroupFactoryABI.abi, provider);
 
       try {
         const groupAddresses: string[] = await factory.getAllGroups();

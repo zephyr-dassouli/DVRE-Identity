@@ -6,8 +6,7 @@ import UserMetadataFactory from "../../abis/UserMetadataFactory.json";
 import UserMetadataForm from "./UserMetadataForm";
 import UserMetadataDisplay from "./UserMetadataDisplay";
 import React from "react";
-
-const USER_METADATA_FACTORY_ADDRESS = "0x62be652c9ca2d2c90c4792c367a883411641d89f";
+import { CONTRACT_ADDRESSES } from "../../config/contracts"; // Adjust the import path as necessary
 
 export default function WalletButton({ setUserAccount }: { setUserAccount: (account: string | null) => void }) {
   const { account, groups, connect, disconnect, register } = useAuth();
@@ -31,7 +30,7 @@ export default function WalletButton({ setUserAccount }: { setUserAccount: (acco
   const fetchMetadata = async (userAddress: string) => {
     try {
       const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const contract = new ethers.Contract(USER_METADATA_FACTORY_ADDRESS, UserMetadataFactory.abi, provider);
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.USER_METADATA_FACTORY_ADDRESS, UserMetadataFactory.abi, provider);
       const metadataAddr = await contract.getUserMetadataContract(userAddress);
       if (metadataAddr === ethers.ZeroAddress || metadataAddr === "0x0000000000000000000000000000000000000000") {
         setShowRegister(true);

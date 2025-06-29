@@ -6,9 +6,7 @@ import { ethers } from "ethers";
 import GroupFactory from "../abis/GroupFactory.json";
 import Group from "../abis/Group.json";
 import UserMetadataFactory from "../abis/UserMetadataFactory.json";
-
-const GROUP_FACTORY_ADDRESS = "0xf6ca29094e6b71fdead291dbceaab107e7f243e8";
-const USER_METADATA_FACTORY_ADDRESS = "0x62be652c9ca2d2c90c4792c367a883411641d89f";
+import { CONTRACT_ADDRESSES } from "../config/contracts";
 
 export function useAuth() {
   const [account, setAccount] = useState<string | null>(null);
@@ -31,7 +29,7 @@ export function useAuth() {
     const signer = await provider.getSigner();
     const addr = await signer.getAddress();
 
-    const factoryContract = new ethers.Contract(GROUP_FACTORY_ADDRESS, GroupFactory.abi, provider);
+    const factoryContract = new ethers.Contract(CONTRACT_ADDRESSES.GROUP_FACTORY_ADDRESS, GroupFactory.abi, provider);
     const groupAddresses: string[] = await factoryContract.getAllGroups();
 
     const groupDetails: { address: string; name: string }[] = [];
@@ -68,7 +66,7 @@ export function useAuth() {
     const signer = await provider.getSigner();
 
     const userMetadataFactory = new ethers.Contract(
-      USER_METADATA_FACTORY_ADDRESS,
+      CONTRACT_ADDRESSES.USER_METADATA_FACTORY_ADDRESS,
       UserMetadataFactory.abi,
       signer
     );

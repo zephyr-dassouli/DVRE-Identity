@@ -9,7 +9,7 @@ import {
 } from '@jupyterlab/apputils';
 
 import { ILauncher } from '@jupyterlab/launcher';
-import { DVREWidget, AuthWidget } from './components';
+import { DVREWidget, AuthWidget, CollaborationWidget } from './components';
 
 const plugin: JupyterFrontEndPlugin<void> = {
   id: 'my-extension',
@@ -40,7 +40,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
       }
     });
 
-    // Command for a second tool
+    // Command for authentication
     const authCommand = 'my-extension:auth';
     app.commands.addCommand(authCommand, {
       label: 'Authentication',
@@ -56,9 +56,26 @@ const plugin: JupyterFrontEndPlugin<void> = {
       }
     });
 
+    // Command for collaboration
+    const collaborationCommand = 'my-extension:collaboration';
+    app.commands.addCommand(collaborationCommand, {
+      label: 'Project Collaboration',
+      caption: 'Manage and collaborate on projects',
+      execute: () => {
+        const content = new CollaborationWidget('Project Collaboration');
+        const widget = new MainAreaWidget({ content });
+        widget.id = `my-collaboration-${Date.now()}`;
+        widget.title.closable = true;
+        
+        app.shell.add(widget, 'main');
+        app.shell.activateById(widget.id);
+      }
+    });
+
     // Add to command palette
     palette.addItem({ command: openCommand, category: 'D-VRE' });
     palette.addItem({ command: authCommand, category: 'D-VRE' });
+    palette.addItem({ command: collaborationCommand, category: 'D-VRE' });
 
     if (launcher) {
       launcher.add({
@@ -71,6 +88,12 @@ const plugin: JupyterFrontEndPlugin<void> = {
         command: authCommand,
         category: 'D-VRE', 
         rank: 2
+      });
+
+      launcher.add({
+        command: collaborationCommand,
+        category: 'D-VRE',
+        rank: 3
       });
 
       console.log('Extension added to launcher successfully!');

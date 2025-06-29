@@ -2,8 +2,7 @@ import { useState } from "react";
 import { ethers } from "ethers";
 import GroupFactoryABI from "../../abis/GroupFactory.json";
 import React from "react";
-
-const GROUP_FACTORY_ADDRESS = "0xf6ca29094e6b71fdead291dbceaab107e7f243e8";
+import { CONTRACT_ADDRESSES } from "../../config/contracts"; // Adjust the import path as necessary
 
 const CreateGroupForm = () => {
   const [groupName, setGroupName] = useState("");
@@ -23,7 +22,7 @@ const CreateGroupForm = () => {
       setStatus("Connecting to MetaMask...");
       const provider = new ethers.BrowserProvider((window as any).ethereum);
       const signer = await provider.getSigner();
-      const factoryContract = new ethers.Contract(GROUP_FACTORY_ADDRESS, GroupFactoryABI.abi, signer);
+      const factoryContract = new ethers.Contract(CONTRACT_ADDRESSES.GROUP_FACTORY_ADDRESS, GroupFactoryABI.abi, signer);
 
       setStatus("Sending transaction to create group...");
       const tx = await factoryContract.createGroup(groupName);

@@ -16,6 +16,9 @@ const groupFactoryJson = JSON.parse(fs.readFileSync(groupFactoryPath));
 const userMetadataFactoryPath = path.join(__dirname, "../artifacts/contracts/UserMetadataFactory.sol/UserMetadataFactory.json");
 const userMetadataFactoryJson = JSON.parse(fs.readFileSync(userMetadataFactoryPath));
 
+const projectFactoryPath = path.join(__dirname, "../artifacts/contracts/ProjectFactory.sol/ProjectFactory.json");
+const projectFactoryJson = JSON.parse(fs.readFileSync(projectFactoryPath));
+
 const deploy = async () => {
   // Deploy GroupFactory
   const groupFactoryContract = new web3.eth.Contract(groupFactoryJson.abi);
@@ -50,6 +53,31 @@ const deploy = async () => {
   const userMetadataFactoryReceipt = await web3.eth.sendSignedTransaction(userMetadataFactorySignedTx.rawTransaction);
 
   console.log("✅ UserMetadataFactory deployed at:", userMetadataFactoryReceipt.contractAddress);
+
+  // Deploy ProjectFactory
+  const projectFactoryContract = new web3.eth.Contract(projectFactoryJson.abi);
+  const projectFactoryDeployTx = projectFactoryContract.deploy({ data: projectFactoryJson.bytecode });
+
+  const projectFactoryGas = await projectFactoryDeployTx.estimateGas();
+  const projectFactoryTx = {
+    from: account.address,
+    gas: Math.floor(Number(projectFactoryGas) * 1.2),
+    gasPrice: 0,
+    data: projectFactoryDeployTx.encodeABI()
+  };
+
+  const projectFactorySignedTx = await web3.eth.accounts.signTransaction(projectFactoryTx, privateKey);
+  const projectFactoryReceipt = await web3.eth.sendSignedTransaction(projectFactorySignedTx.rawTransaction);
+
+  console.log("✅ ProjectFactory deployed at:", projectFactoryReceipt.contractAddress);
+
+  // Print summary
+  console.log("\n📋 Deployment Summary:");
+  console.log("========================");
+  console.log(`GroupFactory:         ${groupFactoryReceipt.contractAddress}`);
+  console.log(`UserMetadataFactory:  ${userMetadataFactoryReceipt.contractAddress}`);
+  console.log(`ProjectFactory:       ${projectFactoryReceipt.contractAddress}`);
+  console.log("\n💡 Remember to update your contract addresses in the frontend configuration!");
 };
 
 deploy().catch(console.error);
