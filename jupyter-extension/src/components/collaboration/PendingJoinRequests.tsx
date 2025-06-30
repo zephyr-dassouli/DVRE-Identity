@@ -209,7 +209,7 @@ export const PendingJoinRequests: React.FC<PendingJoinRequestsProps> = ({
                       opacity: actionLoading ? 0.6 : 1
                     }}
                   >
-                    {actionLoading === request.requester + '-approve' ? 'Approving...' : '✓ Approve'}
+                    {actionLoading === request.requester + '-approve' ? 'Approving...' : 'Approve'}
                   </button>
                   <button
                     onClick={() => handleReject(request.requester)}
@@ -228,7 +228,7 @@ export const PendingJoinRequests: React.FC<PendingJoinRequestsProps> = ({
                       opacity: actionLoading ? 0.6 : 1
                     }}
                   >
-                    {actionLoading === request.requester + '-reject' ? 'Rejecting...' : '✗ Reject'}
+                    {actionLoading === request.requester + '-reject' ? 'Rejecting...' : 'Reject'}
                   </button>
                 </div>
               </div>

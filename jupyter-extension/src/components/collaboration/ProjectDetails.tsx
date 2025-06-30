@@ -17,7 +17,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     const [details, setDetails] = useState<ProjectDetailsType | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { getProjectDetails } = useProjects();
+    const { getProjectDetails, getCollaborativeTemplateName } = useProjects();
     const { account } = useAuth();
 
     // Memoize the loadDetails function to prevent infinite re-renders
@@ -140,6 +140,12 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                             border: '1px solid var(--jp-border-color2)',
                             borderRadius: '3px'
                         }}>
+                            <div style={{ color: 'var(--jp-ui-font-color1)', marginBottom: '4px' }}>
+                                <strong>Type:</strong> {(() => {
+                                  console.log('ProjectDetails: details.collaborativeTemplateId =', details.collaborativeTemplateId);
+                                  return details.collaborativeTemplateId ? getCollaborativeTemplateName(details.collaborativeTemplateId) : 'Custom Project';
+                                })()}
+                            </div>
                             <div style={{ color: 'var(--jp-ui-font-color1)', marginBottom: '4px' }}>
                                 <strong>Creator:</strong> {details.creator.slice(0, 6)}...{details.creator.slice(-4)}
                             </div>

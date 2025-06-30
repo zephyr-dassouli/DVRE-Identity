@@ -12,6 +12,16 @@ export interface ProjectInfo {
   memberCount: number;
   isMember: boolean;
   hasPendingRequest?: boolean;
+  collaborativeTemplateId?: number;
+}
+
+export interface CollaborativeTemplate {
+  id: number;
+  name: string;
+  description: string;
+  availableRoles: string[];
+  defaultOwnerRole: string;
+  isActive: boolean;
 }
 
 export interface ProjectDetails extends ProjectInfo {
@@ -27,6 +37,7 @@ export interface ProjectDetails extends ProjectInfo {
 export const useProjects = () => {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [userProjects, setUserProjects] = useState<ProjectInfo[]>([]);
+  const [collaborativeTemplates, setCollaborativeTemplates] = useState<CollaborativeTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,6 +134,28 @@ export const useProjects = () => {
     }
   };
 
+  const createProjectFromCollaborativeTemplate = async (collaborativeTemplateId: number, objective: string, ownerRole: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const factory = await getProjectFactory();
+      const tx = await factory.createProjectFromTemplate(collaborativeTemplateId, objective, ownerRole);
+      await tx.wait();
+      
+      // Refresh projects list
+      await loadProjects();
+      await loadUserProjects();
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Failed to create project from template');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -154,6 +187,16 @@ export const useProjects = () => {
             hasPendingRequest = false;
           }
         }
+        // Get collaborative template ID
+        let collaborativeTemplateId;
+        try {
+          collaborativeTemplateId = await project.getTemplateId();
+          collaborativeTemplateId = Number(collaborativeTemplateId);
+          console.log('Project template ID:', collaborativeTemplateId, 'for project:', address);
+        } catch (err) {
+          console.log('Failed to get template ID for project:', address, err);
+          collaborativeTemplateId = 999999; // Default for custom projects
+        }
         
         projectsInfo.push({
           address,
@@ -162,7 +205,8 @@ export const useProjects = () => {
           createdAt: Number(createdAt),
           memberCount: Number(memberCount),
           isMember,
-          hasPendingRequest
+          hasPendingRequest,
+          collaborativeTemplateId
         });
       }
       
@@ -198,6 +242,15 @@ export const useProjects = () => {
           const createdAt = await project.createdAt();
           const memberCount = await project.getActiveMemberCount();
           
+          // Get collaborative template ID
+          let collaborativeTemplateId;
+          try {
+            collaborativeTemplateId = await project.getTemplateId();
+            collaborativeTemplateId = Number(collaborativeTemplateId);
+          } catch (err) {
+            collaborativeTemplateId = 999999; // Default for custom projects
+          }
+          
           userProjectsInfo.push({
             address,
             objective,
@@ -205,7 +258,8 @@ export const useProjects = () => {
             createdAt: Number(createdAt),
             memberCount: Number(memberCount),
             isMember: true,
-            hasPendingRequest: false
+            hasPendingRequest: false,
+            collaborativeTemplateId
           });
         }
       }
@@ -213,6 +267,80 @@ export const useProjects = () => {
       setUserProjects(userProjectsInfo);
     } catch (err: any) {
       setError(err.message || 'Failed to load user projects');
+    }
+  };
+
+  const loadCollaborativeTemplates = async () => {
+    try {
+      const factory = await getProjectFactory();
+      const result = await factory.getAllTemplates();
+      
+      const collaborativeTemplatesInfo: CollaborativeTemplate[] = [];
+      for (let i = 0; i < result.ids.length; i++) {
+        const templateDetails = await factory.getTemplate(result.ids[i]);
+        collaborativeTemplatesInfo.push({
+          id: Number(result.ids[i]),
+          name: result.names[i],
+          description: result.descriptions[i],
+          availableRoles: templateDetails.availableRoles,
+          defaultOwnerRole: templateDetails.defaultOwnerRole,
+          isActive: result.isActiveList[i]
+        });
+      }
+      
+      console.log('Loaded collaborative templates:', collaborativeTemplatesInfo);
+      setCollaborativeTemplates(collaborativeTemplatesInfo);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load collaborative templates');
+    }
+  };
+
+  const getProjectsByCollaborativeTemplate = async (collaborativeTemplateId: number): Promise<ProjectInfo[]> => {
+    try {
+      const factory = await getProjectFactory();
+      const projectAddresses = await factory.getProjectsByTemplate(collaborativeTemplateId);
+      
+      const projectsInfo: ProjectInfo[] = [];
+      
+      for (const address of projectAddresses) {
+        const project = await getProjectContract(address);
+        const objective = await project.objective();
+        const creator = await project.creator();
+        const createdAt = await project.createdAt();
+        const memberCount = await project.getActiveMemberCount();
+        
+        // Check if current user is a member
+        const provider = getProvider();
+        const signer = await provider.getSigner();
+        const userAddress = await signer.getAddress();
+        const isMember = await project.isMember(userAddress);
+        
+        // Check if user has a pending join request
+        let hasPendingRequest = false;
+        if (!isMember) {
+          try {
+            hasPendingRequest = await project.hasPendingJoinRequest(userAddress);
+          } catch (err) {
+            hasPendingRequest = false;
+          }
+        }
+        
+        projectsInfo.push({
+          address,
+          objective,
+          creator,
+          createdAt: Number(createdAt),
+          memberCount: Number(memberCount),
+          isMember,
+          hasPendingRequest,
+          collaborativeTemplateId
+        });
+      }
+      
+      return projectsInfo;
+    } catch (err: any) {
+      setError(err.message || 'Failed to load projects by template');
+      return [];
     }
   };
 
@@ -352,27 +480,54 @@ export const useProjects = () => {
     }
   };
 
+  // Helper function to get template name by ID
+  const getCollaborativeTemplateName = (templateId: number): string => {
+    if (templateId === 999999) return 'Custom Project';
+    
+    const template = collaborativeTemplates.find(t => t.id === templateId);
+    console.log('Looking for template ID:', templateId, 'in templates:', collaborativeTemplates, 'found:', template);
+    
+    if (template) {
+      return template.name;
+    }
+    
+    // If templates haven't loaded yet or template not found
+    if (collaborativeTemplates.length === 0) {
+      return 'Loading...';
+    }
+    
+    return `Unknown Template (ID: ${templateId})`;
+  };
+
   useEffect(() => {
     if ((window as any).ethereum) {
-      loadProjects();
-      loadUserProjects();
+      loadCollaborativeTemplates().then(() => {
+        // Load projects after templates are loaded
+        loadProjects();
+        loadUserProjects();
+      });
     }
   }, []);
 
   return {
     projects,
     userProjects,
+    collaborativeTemplates,
     loading,
     error,
     createProject,
+    createProjectFromCollaborativeTemplate,
     loadProjects,
     loadUserProjects,
+    loadCollaborativeTemplates,
     getProjectDetails,
     requestToJoinProject,
     getProjectRoles,
     getPendingJoinRequests,
     approveJoinRequest,
     rejectJoinRequest,
-    hasPendingJoinRequest
+    hasPendingJoinRequest,
+    getProjectsByCollaborativeTemplate,
+    getCollaborativeTemplateName
   };
 };

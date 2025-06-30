@@ -25,7 +25,7 @@ export const AuthComponent: React.FC<AuthComponentProps> = ({
         color: 'var(--jp-ui-font-color1)',
         textAlign: 'center'
       }}>
-      🔐 {title}
+      {title}
       </h1>
        {userAccount && <h1>User info</h1>}
         <WalletButton setUserAccount={setUserAccount} />

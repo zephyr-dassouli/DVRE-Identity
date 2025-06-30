@@ -1,5 +1,5 @@
 import React from 'react';
-import { ProjectInfo } from '../../hooks/useProjects';
+import { ProjectInfo, useProjects } from '../../hooks/useProjects';
 
 interface ProjectListProps {
   projects: ProjectInfo[];
@@ -14,6 +14,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   onSelectProject,
   loading = false 
 }) => {
+  const { getCollaborativeTemplateName } = useProjects();
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -99,6 +100,17 @@ export const ProjectList: React.FC<ProjectListProps> = ({
               <div style={{ 
                 fontSize: '12px',
                 color: 'var(--jp-ui-font-color2)',
+                marginBottom: '4px'
+              }}>
+                <strong>Type:</strong> {(() => {
+                  console.log('ProjectList: project.collaborativeTemplateId =', project.collaborativeTemplateId);
+                  return project.collaborativeTemplateId ? getCollaborativeTemplateName(project.collaborativeTemplateId) : 'Custom Project';
+                })()}
+              </div>
+              
+              <div style={{ 
+                fontSize: '12px',
+                color: 'var(--jp-ui-font-color2)',
                 display: 'flex',
                 justifyContent: 'space-between'
               }}>
@@ -109,8 +121,8 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                          'var(--jp-ui-font-color3)',
                   fontWeight: project.isMember ? 'bold' : 'normal'
                 }}>
-                  {project.isMember ? '✓ Joined' : 
-                   project.hasPendingRequest ? '⏳ Request Pending' : 
+                  {project.isMember ? 'Joined' : 
+                   project.hasPendingRequest ? 'Request Pending' : 
                    'Click to request join'}
                 </span>
               </div>

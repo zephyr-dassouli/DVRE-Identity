@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useProjects, ProjectInfo } from '../../hooks/useProjects';
-import CreateProjectForm from './CreateProjectForm';
+import ProjectCreationHub from './ProjectCreationHub';
 import ProjectList from './ProjectList';
 import ProjectDetails from './ProjectDetails';
 import JoinProjectDialog from './JoinProjectDialog';
@@ -95,7 +95,7 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
           fontSize: '1.5rem',
           color: 'var(--jp-ui-font-color1)',
           margin: '0 0 16px 0'
-        }}>
+        }}        >
           Project Collaboration
         </h1>
         <p style={{ 
@@ -157,32 +157,17 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
     );
   }
 
+  const handleProjectCreationSuccess = () => {
+    setViewMode('main');
+    handleRefreshProjects();
+  };
+
   if (viewMode === 'create') {
     return (
-      <div style={{ 
-        padding: '20px', 
-        fontFamily: 'var(--jp-ui-font-family)',
-        background: 'var(--jp-layout-color1)',
-        minHeight: '400px'
-      }}>
-        <div style={{ marginBottom: '20px' }}>
-          <button
-            onClick={handleBackToMain}
-            style={{
-              padding: '6px 12px',
-              background: 'var(--jp-layout-color2)',
-              border: '1px solid var(--jp-border-color1)',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              color: 'var(--jp-ui-font-color1)',
-              fontSize: '12px'
-            }}
-          >
-            ← Back to Projects
-          </button>
-        </div>
-        <CreateProjectForm />
-      </div>
+      <ProjectCreationHub 
+        onBack={handleBackToMain}
+        onSuccess={handleProjectCreationSuccess}
+      />
     );
   }
 
@@ -203,7 +188,7 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
           fontSize: '1.5rem',
           color: 'var(--jp-ui-font-color1)',
           margin: 0
-        }}>
+        }}        >
           Project Collaboration
         </h1>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -221,7 +206,7 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
               opacity: loading ? 0.6 : 1
             }}
           >
-            {loading ? '⟳ Refreshing...' : '⟳ Refresh'}
+            {loading ? 'Refreshing...' : 'Refresh'}
           </button>
           <button
             onClick={() => setViewMode('create')}

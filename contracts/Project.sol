@@ -22,8 +22,9 @@ contract Project {
     string public objective; // This serves as both name and objective
     string[] public availableRoles;
     uint256 public createdAt;
-    bool public finished; // New: Track if project is finished
-    uint256 public finishedAt; // New: Track when project was finished
+    uint256 public templateId; // 999999 for custom projects
+    bool public finished; 
+    uint256 public finishedAt;
     
     // Mappings
     mapping(address => Member) public members;
@@ -37,8 +38,8 @@ contract Project {
     event MemberRoleUpdated(address indexed member, string oldRole, string newRole);
     event MemberRemoved(address indexed member);
     event ObjectiveUpdated(string oldObjective, string newObjective);
-    event ProjectFinished(uint256 timestamp); // New: Event for project completion
-    event ProjectReactivated(uint256 timestamp); // New: Event for project reactivation
+    event ProjectFinished(uint256 timestamp);
+    event ProjectReactivated(uint256 timestamp); 
     event JoinRequestSubmitted(address indexed requester, string requestedRole, uint256 timestamp);
     event JoinRequestApproved(address indexed requester, string role, uint256 timestamp);
     event JoinRequestRejected(address indexed requester, uint256 timestamp);
@@ -74,6 +75,7 @@ contract Project {
         creator = _creator;
         objective = _objective;
         createdAt = block.timestamp;
+        templateId = 999999; // Default to custom project, can be updated by factory
         finished = false; // Initialize as not finished
         finishedAt = 0;
 
@@ -93,6 +95,13 @@ contract Project {
         memberAddresses.push(_creator);
 
         emit MemberAdded(_creator, _ownerRole, block.timestamp);
+    }
+
+    // Function to set template ID (can only be called once by factory)
+    function setTemplateId(uint256 _templateId) external {
+        require(templateId == 999999, "Template ID already set");
+        require(msg.sender != address(0), "Invalid caller");
+        templateId = _templateId;
     }
 
     // Mark project as finished
@@ -286,6 +295,11 @@ contract Project {
     // Get finished timestamp
     function getFinishedAt() external view returns (uint256) {
         return finishedAt;
+    }
+
+    // Get template ID
+    function getTemplateId() external view returns (uint256) {
+        return templateId;
     }
 
     // Get project status info
