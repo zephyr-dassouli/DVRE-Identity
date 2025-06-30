@@ -55,18 +55,40 @@ export const ProjectList: React.FC<ProjectListProps> = ({
               style={{
                 padding: '12px',
                 background: 'var(--jp-layout-color0)',
-                border: '1px solid var(--jp-border-color2)',
+                border: project.isMember 
+                  ? '1px solid var(--jp-brand-color2)' 
+                  : '1px solid var(--jp-border-color2)',
                 borderRadius: '3px',
                 cursor: 'pointer',
-                transition: 'background-color 0.2s'
+                transition: 'all 0.2s',
+                position: 'relative'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--jp-layout-color2)';
+                e.currentTarget.style.background = project.isMember 
+                  ? 'var(--jp-brand-color3)' 
+                  : 'var(--jp-layout-color2)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'var(--jp-layout-color0)';
               }}
             >
+              {/* Join indicator for non-members */}
+              {!project.isMember && (
+                <div style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  background: project.hasPendingRequest ? 'var(--jp-warn-color1)' : 'var(--jp-brand-color1)',
+                  color: 'white',
+                  fontSize: '10px',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  fontWeight: 'bold'
+                }}>
+                  {project.hasPendingRequest ? 'PENDING' : 'JOIN'}
+                </div>
+              )}
+              
               <div style={{ 
                 fontWeight: 'bold',
                 color: 'var(--jp-ui-font-color1)',
@@ -81,7 +103,16 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                 justifyContent: 'space-between'
               }}>
                 <span>Members: {project.memberCount}</span>
-                <span>{project.isMember ? '✓ Joined' : 'Not joined'}</span>
+                <span style={{ 
+                  color: project.isMember ? 'var(--jp-brand-color1)' : 
+                         project.hasPendingRequest ? 'var(--jp-warn-color1)' : 
+                         'var(--jp-ui-font-color3)',
+                  fontWeight: project.isMember ? 'bold' : 'normal'
+                }}>
+                  {project.isMember ? '✓ Joined' : 
+                   project.hasPendingRequest ? '⏳ Request Pending' : 
+                   'Click to request join'}
+                </span>
               </div>
               <div style={{ 
                 fontSize: '11px',

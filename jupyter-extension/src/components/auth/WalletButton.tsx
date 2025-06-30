@@ -89,7 +89,6 @@ export default function WalletButton({ setUserAccount }: { setUserAccount: (acco
                 {projects.map(({ address, name }) => (
                   <li key={address} style={{
                     padding: '4px 0',
-                    borderBottom: '1px solid var(--jp-border-color2)',
                     fontSize: '12px'
                   }}>
                     <div style={{ fontWeight: 'bold', color: 'var(--jp-ui-font-color1)' }}>

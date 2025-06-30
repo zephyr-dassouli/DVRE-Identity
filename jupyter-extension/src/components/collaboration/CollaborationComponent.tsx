@@ -4,8 +4,9 @@ import { useProjects, ProjectInfo } from '../../hooks/useProjects';
 import CreateProjectForm from './CreateProjectForm';
 import ProjectList from './ProjectList';
 import ProjectDetails from './ProjectDetails';
+import JoinProjectDialog from './JoinProjectDialog';
 
-type ViewMode = 'main' | 'create' | 'details';
+type ViewMode = 'main' | 'create' | 'details' | 'join';
 
 interface CollaborationComponentProps {
   title?: string;
@@ -15,18 +16,70 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
   title = 'Project Collaboration' 
 }) => {
   const { account } = useAuth();
-  const { projects, userProjects, loading, error } = useProjects();
+  const { projects, userProjects, loading, error, requestToJoinProject, getProjectRoles, loadProjects, loadUserProjects } = useProjects();
   const [viewMode, setViewMode] = useState<ViewMode>('main');
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [projectToJoin, setProjectToJoin] = useState<ProjectInfo | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
+  const [joinLoading, setJoinLoading] = useState(false);
 
-  const handleSelectProject = (project: ProjectInfo) => {
-    setSelectedProject(project.address);
-    setViewMode('details');
+  const handleSelectProject = async (project: ProjectInfo) => {
+    if (project.isMember) {
+      // User is already a member, show project details
+      setSelectedProject(project.address);
+      setViewMode('details');
+    } else if (project.hasPendingRequest) {
+      // User has a pending request, show a message
+      alert('You already have a pending join request for this project. Please wait for the project creator to review your request.');
+    } else {
+      // User is not a member and has no pending request, load available roles and show join dialog
+      setProjectToJoin(project);
+      try {
+        const roles = await getProjectRoles(project.address);
+        setAvailableRoles(roles);
+      } catch (err) {
+        console.error('Failed to load project roles:', err);
+        setAvailableRoles([]);
+      }
+      setViewMode('join');
+    }
+  };
+
+  const handleJoinProject = async (role: string): Promise<boolean> => {
+    if (!projectToJoin) return false;
+    
+    setJoinLoading(true);
+    try {
+      const success = await requestToJoinProject(projectToJoin.address, role);
+      if (success) {
+        // Successfully submitted join request
+        alert(`Join request submitted successfully! The project creator will review your request to join as "${role}".`);
+        console.log('Successfully submitted join request');
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to submit join request:', err);
+      return false;
+    } finally {
+      setJoinLoading(false);
+    }
   };
 
   const handleBackToMain = () => {
     setViewMode('main');
     setSelectedProject(null);
+    setProjectToJoin(null);
+    setAvailableRoles([]);
+    setJoinLoading(false);
+  };
+
+  const handleRefreshProjects = async () => {
+    try {
+      await Promise.all([loadProjects(), loadUserProjects()]);
+    } catch (error) {
+      console.error('Failed to refresh projects:', error);
+    }
   };
 
   if (!account) {
@@ -68,6 +121,25 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
     );
   }
 
+  if (viewMode === 'join' && projectToJoin) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        fontFamily: 'var(--jp-ui-font-family)',
+        background: 'var(--jp-layout-color1)',
+        minHeight: '400px'
+      }}>
+        <JoinProjectDialog
+          project={projectToJoin}
+          availableRoles={availableRoles}
+          onJoin={handleJoinProject}
+          onCancel={handleBackToMain}
+          loading={joinLoading}
+        />
+      </div>
+    );
+  }
+
   if (viewMode === 'details' && selectedProject) {
     return (
       <div style={{ 
@@ -79,6 +151,7 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
         <ProjectDetails 
           projectAddress={selectedProject}
           onBack={handleBackToMain}
+          onMembershipChange={handleRefreshProjects}
         />
       </div>
     );
@@ -133,20 +206,38 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
         }}>
           Project Collaboration
         </h1>
-        <button
-          onClick={() => setViewMode('create')}
-          style={{
-            padding: '8px 16px',
-            background: 'var(--jp-brand-color1)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '3px',
-            cursor: 'pointer',
-            fontSize: '13px'
-          }}
-        >
-          + New Project
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={handleRefreshProjects}
+            disabled={loading}
+            style={{
+              padding: '8px 16px',
+              background: 'var(--jp-layout-color2)',
+              border: '1px solid var(--jp-border-color1)',
+              borderRadius: '3px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              color: 'var(--jp-ui-font-color1)',
+              fontSize: '13px',
+              opacity: loading ? 0.6 : 1
+            }}
+          >
+            {loading ? '⟳ Refreshing...' : '⟳ Refresh'}
+          </button>
+          <button
+            onClick={() => setViewMode('create')}
+            style={{
+              padding: '8px 16px',
+              background: 'var(--jp-brand-color1)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            + New Project
+          </button>
+        </div>
       </div>
 
       <div style={{ 

@@ -43,7 +43,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
       caption: 'Authentication Tool',
       icon: authIcon,
       execute: () => {
-        const content = new AuthWidget('My Auth Tool');
+        const content = new AuthWidget('Authentication');
         const widget = new MainAreaWidget({ content });
         widget.id = `my-auth-${Date.now()}`;
         widget.title.closable = true;

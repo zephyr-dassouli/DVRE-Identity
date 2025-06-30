@@ -1,19 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ProjectDetails as ProjectDetailsType, useProjects } from '../../hooks/useProjects';
+import { useAuth } from '../../hooks/useAuth';
+import PendingJoinRequests from './PendingJoinRequests';
 
 interface ProjectDetailsProps {
     projectAddress: string;
     onBack: () => void;
+    onMembershipChange?: () => void;
 }
 
 export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     projectAddress,
-    onBack
+    onBack,
+    onMembershipChange
 }) => {
     const [details, setDetails] = useState<ProjectDetailsType | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { getProjectDetails } = useProjects();
+    const { account } = useAuth();
 
     // Memoize the loadDetails function to prevent infinite re-renders
     const loadDetails = useCallback(async () => {
@@ -224,6 +229,13 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
                         ))}
                     </div>
                 </div>
+
+                {/* Pending Join Requests Section - Only visible to project creators */}
+                <PendingJoinRequests 
+                    projectAddress={projectAddress}
+                    isCreator={account === details.creator}
+                    onMembershipChange={onMembershipChange}
+                />
             </div>
         </div>
     );

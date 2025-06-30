@@ -10,6 +10,13 @@ contract Project {
         bool isActive;
     }
 
+    struct JoinRequest {
+        address requester;
+        string requestedRole;
+        uint256 requestedAt;
+        bool isPending;
+    }
+
     // State variables
     address public creator;
     string public objective; // This serves as both name and objective
@@ -22,6 +29,8 @@ contract Project {
     mapping(address => Member) public members;
     mapping(string => bool) public validRoles;
     address[] public memberAddresses;
+    mapping(address => JoinRequest) public joinRequests;
+    address[] public pendingRequests;
 
     // Events
     event MemberAdded(address indexed member, string role, uint256 timestamp);
@@ -30,6 +39,9 @@ contract Project {
     event ObjectiveUpdated(string oldObjective, string newObjective);
     event ProjectFinished(uint256 timestamp); // New: Event for project completion
     event ProjectReactivated(uint256 timestamp); // New: Event for project reactivation
+    event JoinRequestSubmitted(address indexed requester, string requestedRole, uint256 timestamp);
+    event JoinRequestApproved(address indexed requester, string role, uint256 timestamp);
+    event JoinRequestRejected(address indexed requester, uint256 timestamp);
 
     // Modifiers
     modifier onlyCreator() {
@@ -98,7 +110,81 @@ contract Project {
         emit ProjectReactivated(block.timestamp);
     }
 
-    // Add a new member to the project
+    // Submit a join request
+    function requestToJoin(string memory _requestedRole) 
+        external 
+        validRole(_requestedRole)
+        notFinished
+    {
+        require(msg.sender != creator, "Creator is already a member");
+        require(!members[msg.sender].isActive, "Already a member");
+        require(!joinRequests[msg.sender].isPending, "Join request already pending");
+
+        joinRequests[msg.sender] = JoinRequest({
+            requester: msg.sender,
+            requestedRole: _requestedRole,
+            requestedAt: block.timestamp,
+            isPending: true
+        });
+        pendingRequests.push(msg.sender);
+
+        emit JoinRequestSubmitted(msg.sender, _requestedRole, block.timestamp);
+    }
+
+    // Approve a join request
+    function approveJoinRequest(address _requester) 
+        external 
+        onlyCreator 
+        notFinished
+    {
+        require(joinRequests[_requester].isPending, "No pending request from this address");
+        require(!members[_requester].isActive, "User is already a member");
+
+        JoinRequest memory request = joinRequests[_requester];
+        
+        // Add member
+        members[_requester] = Member({
+            memberAddress: _requester,
+            role: request.requestedRole,
+            joinedAt: block.timestamp,
+            isActive: true
+        });
+        memberAddresses.push(_requester);
+
+        // Remove from pending requests
+        joinRequests[_requester].isPending = false;
+        _removePendingRequest(_requester);
+
+        emit JoinRequestApproved(_requester, request.requestedRole, block.timestamp);
+        emit MemberAdded(_requester, request.requestedRole, block.timestamp);
+    }
+
+    // Reject a join request
+    function rejectJoinRequest(address _requester) 
+        external 
+        onlyCreator 
+    {
+        require(joinRequests[_requester].isPending, "No pending request from this address");
+
+        // Remove from pending requests
+        joinRequests[_requester].isPending = false;
+        _removePendingRequest(_requester);
+
+        emit JoinRequestRejected(_requester, block.timestamp);
+    }
+
+    // Internal function to remove from pending requests array
+    function _removePendingRequest(address _requester) internal {
+        for (uint256 i = 0; i < pendingRequests.length; i++) {
+            if (pendingRequests[i] == _requester) {
+                pendingRequests[i] = pendingRequests[pendingRequests.length - 1];
+                pendingRequests.pop();
+                break;
+            }
+        }
+    }
+
+    // Add a new member to the project (direct add by creator)
     function addMember(address _member, string memory _role) 
         external 
         onlyCreator 
@@ -246,5 +332,31 @@ contract Project {
     function getMemberRole(address _member) external view returns (string memory) {
         require(members[_member].isActive, "Member does not exist");
         return members[_member].role;
+    }
+
+    // Get join request information
+    function getJoinRequest(address _requester) external view returns (
+        address requester,
+        string memory requestedRole,
+        uint256 requestedAt,
+        bool isPending
+    ) {
+        JoinRequest memory request = joinRequests[_requester];
+        return (request.requester, request.requestedRole, request.requestedAt, request.isPending);
+    }
+
+    // Get all pending join requests
+    function getPendingJoinRequests() external view returns (address[] memory) {
+        return pendingRequests;
+    }
+
+    // Check if address has pending join request
+    function hasPendingJoinRequest(address _address) external view returns (bool) {
+        return joinRequests[_address].isPending;
+    }
+
+    // Get pending join requests count
+    function getPendingRequestsCount() external view returns (uint256) {
+        return pendingRequests.length;
     }
 }
