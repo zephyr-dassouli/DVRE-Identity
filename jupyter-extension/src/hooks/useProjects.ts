@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { CONTRACT_ADDRESSES } from '../config/contracts';
+import { useFactoryRegistry } from './useFactoryRegistry';
 import ProjectFactoryABI from '../abis/ProjectFactory.json';
 import ProjectABI from '../abis/Project.json';
 
@@ -40,6 +40,7 @@ export const useProjects = () => {
   const [collaborativeTemplates, setCollaborativeTemplates] = useState<CollaborativeTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { getFactoryAddress } = useFactoryRegistry();
 
   const getProvider = () => {
     if (!(window as any).ethereum) {
@@ -51,7 +52,14 @@ export const useProjects = () => {
   const getProjectFactory = async () => {
     const provider = getProvider();
     const signer = await provider.getSigner();
-    return new ethers.Contract(CONTRACT_ADDRESSES.PROJECT_FACTORY_ADDRESS, ProjectFactoryABI.abi, signer);
+    
+    // Get ProjectFactory address from registry
+    const projectFactoryAddress = await getFactoryAddress("ProjectFactory");
+    if (!projectFactoryAddress) {
+      throw new Error("ProjectFactory not found in registry");
+    }
+    
+    return new ethers.Contract(projectFactoryAddress, ProjectFactoryABI.abi, signer);
   };
 
   const getProjectContract = async (address: string) => {

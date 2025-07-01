@@ -6,11 +6,12 @@ import { ethers } from "ethers";
 import ProjectFactory from "../abis/ProjectFactory.json";
 import Project from "../abis/Project.json";
 import UserMetadataFactory from "../abis/UserMetadataFactory.json";
-import { CONTRACT_ADDRESSES } from "../config/contracts";
+import { useFactoryRegistry } from "./useFactoryRegistry";
 
 export function useAuth() {
   const [account, setAccount] = useState<string | null>(null);
   const [projects, setProjects] = useState<{ address: string; name: string }[]>([]);
+  const { getFactoryAddress } = useFactoryRegistry();
 
   useEffect(() => {
     const stored = sessionStorage.getItem("auth");
@@ -29,7 +30,14 @@ export function useAuth() {
     const signer = await provider.getSigner();
     const addr = await signer.getAddress();
 
-    const factoryContract = new ethers.Contract(CONTRACT_ADDRESSES.PROJECT_FACTORY_ADDRESS, ProjectFactory.abi, provider);
+    // Get ProjectFactory address from registry
+    const projectFactoryAddress = await getFactoryAddress("ProjectFactory");
+    if (!projectFactoryAddress) {
+      console.error("Failed to get ProjectFactory address from registry");
+      return;
+    }
+
+    const factoryContract = new ethers.Contract(projectFactoryAddress, ProjectFactory.abi, provider);
     const projectAddresses: string[] = await factoryContract.getAllProjects();
 
     const projectDetails: { address: string; name: string }[] = [];
@@ -65,8 +73,15 @@ export function useAuth() {
     const provider = new ethers.BrowserProvider((window as any).ethereum);
     const signer = await provider.getSigner();
 
+    // Get UserMetadataFactory address from registry
+    const userMetadataFactoryAddress = await getFactoryAddress("UserMetadataFactory");
+    if (!userMetadataFactoryAddress) {
+      console.error("Failed to get UserMetadataFactory address from registry");
+      return false;
+    }
+
     const userMetadataFactory = new ethers.Contract(
-      CONTRACT_ADDRESSES.USER_METADATA_FACTORY_ADDRESS,
+      userMetadataFactoryAddress,
       UserMetadataFactory.abi,
       signer
     );
@@ -82,5 +97,16 @@ export function useAuth() {
     }
   };
 
-  return { account, projects, connect, disconnect, register };
+  // Get factory address from registry (alternative to hardcoded addresses)
+  const getFactoryFromRegistry = async (factoryName: string) => {
+    try {
+      const address = await getFactoryAddress(factoryName);
+      return address;
+    } catch (error) {
+      console.error(`Failed to get ${factoryName} from registry:`, error);
+      return null;
+    }
+  };
+
+  return { account, projects, connect, disconnect, register, getFactoryFromRegistry };
 }

@@ -2,6 +2,7 @@ require("dotenv").config();
 const { Web3 } = require("web3");
 const fs = require("fs");
 const path = require("path");
+const { registerMultipleFactories } = require("./registryHook");
 
 const rpcURL = process.env.RPC_URL;
 const privateKey = process.env.PRIVATE_KEY;
@@ -57,6 +58,21 @@ const deploy = async () => {
   console.log("========================");
   console.log(`UserMetadataFactory:  ${userMetadataFactoryReceipt.contractAddress}`);
   console.log(`ProjectFactory:       ${projectFactoryReceipt.contractAddress}`);
+
+  // Register factories in FactoryRegistry
+  console.log("\nRegistering factories in FactoryRegistry...");
+  const factories = [
+    { name: "UserMetadataFactory", address: userMetadataFactoryReceipt.contractAddress },
+    { name: "ProjectFactory", address: projectFactoryReceipt.contractAddress }
+  ];
+
+  try {
+    await registerMultipleFactories(factories);
+    console.log("\nAll factories registered successfully in FactoryRegistry!");
+  } catch (error) {
+    console.error("\nError registering factories:", error.message);
+  }
+
   console.log("\nRemember to update your contract addresses in the frontend configuration!");
 };
 
