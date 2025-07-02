@@ -17,9 +17,15 @@ const userMetadataFactoryJson = JSON.parse(fs.readFileSync(userMetadataFactoryPa
 const projectFactoryPath = path.join(__dirname, "../artifacts/contracts/ProjectFactory.sol/ProjectFactory.json");
 const projectFactoryJson = JSON.parse(fs.readFileSync(projectFactoryPath));
 
-const deploy = async () => {
+// Load new JSON project system contracts
+const templateRegistryPath = path.join(__dirname, "../artifacts/contracts/ProjectTemplateRegistry.sol/ProjectTemplateRegistry.json");
+const templateRegistryJson = JSON.parse(fs.readFileSync(templateRegistryPath));
 
-  // // Deploy UserMetadataFactory
+const deploy = async () => {
+  console.log("Deploying all contracts with account:", account.address);
+
+  // Deploy UserMetadataFactory
+  console.log("\nDeploying UserMetadataFactory...");
   const userMetadataFactoryContract = new web3.eth.Contract(userMetadataFactoryJson.abi);
   const userMetadataFactoryDeployTx = userMetadataFactoryContract.deploy({ data: userMetadataFactoryJson.bytecode });
 
@@ -33,12 +39,32 @@ const deploy = async () => {
 
   const userMetadataFactorySignedTx = await web3.eth.accounts.signTransaction(userMetadataFactoryTx, privateKey);
   const userMetadataFactoryReceipt = await web3.eth.sendSignedTransaction(userMetadataFactorySignedTx.rawTransaction);
-
   console.log("UserMetadataFactory deployed at:", userMetadataFactoryReceipt.contractAddress);
 
-  // Deploy ProjectFactory
+  // Deploy ProjectTemplateRegistry
+  console.log("\nDeploying ProjectTemplateRegistry...");
+  const templateRegistryContract = new web3.eth.Contract(templateRegistryJson.abi);
+  const templateRegistryDeployTx = templateRegistryContract.deploy({ data: templateRegistryJson.bytecode });
+
+  const templateRegistryGas = await templateRegistryDeployTx.estimateGas();
+  const templateRegistryTx = {
+    from: account.address,
+    gas: Math.floor(Number(templateRegistryGas) * 1.2),
+    gasPrice: 0,
+    data: templateRegistryDeployTx.encodeABI()
+  };
+
+  const templateRegistrySignedTx = await web3.eth.accounts.signTransaction(templateRegistryTx, privateKey);
+  const templateRegistryReceipt = await web3.eth.sendSignedTransaction(templateRegistrySignedTx.rawTransaction);
+  console.log("ProjectTemplateRegistry deployed at:", templateRegistryReceipt.contractAddress);
+
+  // Deploy ProjectFactory (JSON-based system)
+  console.log("\nDeploying ProjectFactory...");
   const projectFactoryContract = new web3.eth.Contract(projectFactoryJson.abi);
-  const projectFactoryDeployTx = projectFactoryContract.deploy({ data: projectFactoryJson.bytecode });
+  const projectFactoryDeployTx = projectFactoryContract.deploy({ 
+    data: projectFactoryJson.bytecode,
+    arguments: [templateRegistryReceipt.contractAddress]
+  });
 
   const projectFactoryGas = await projectFactoryDeployTx.estimateGas();
   const projectFactoryTx = {
@@ -50,19 +76,32 @@ const deploy = async () => {
 
   const projectFactorySignedTx = await web3.eth.accounts.signTransaction(projectFactoryTx, privateKey);
   const projectFactoryReceipt = await web3.eth.sendSignedTransaction(projectFactorySignedTx.rawTransaction);
-
   console.log("ProjectFactory deployed at:", projectFactoryReceipt.contractAddress);
 
-  // Print summary
-  console.log("\nDeployment Summary:");
-  console.log("========================");
-  console.log(`UserMetadataFactory:  ${userMetadataFactoryReceipt.contractAddress}`);
-  console.log(`ProjectFactory:       ${projectFactoryReceipt.contractAddress}`);
+  // Verify initial templates
+  console.log("\nVerifying initial templates...");
+  const templateRegistryInstance = new web3.eth.Contract(templateRegistryJson.abi, templateRegistryReceipt.contractAddress);
+  const templateCount = await templateRegistryInstance.methods.getTemplateCount().call();
+  console.log("Number of initial templates:", templateCount.toString());
 
-  // Register factories in FactoryRegistry
-  console.log("\nRegistering factories in FactoryRegistry...");
+  for (let i = 0; i < templateCount; i++) {
+    const template = await templateRegistryInstance.methods.getTemplate(i).call();
+    console.log(`Template ${i}: ${template[0]} (${template[2]})`);
+  }
+
+  // Print summary
+  console.log("\n=== Deployment Summary ===");
+  console.log("Deployed Contracts:");
+  console.log(`  UserMetadataFactory:      ${userMetadataFactoryReceipt.contractAddress}`);
+  console.log(`  ProjectTemplateRegistry:  ${templateRegistryReceipt.contractAddress}`);
+  console.log(`  ProjectFactory:           ${projectFactoryReceipt.contractAddress}`);
+  console.log(`\nDeployer: ${account.address}`);
+
+  // Register all factories in FactoryRegistry (frontend needs these addresses)
+  console.log("\nRegistering all factories in FactoryRegistry...");
   const factories = [
     { name: "UserMetadataFactory", address: userMetadataFactoryReceipt.contractAddress },
+    { name: "ProjectTemplateRegistry", address: templateRegistryReceipt.contractAddress },
     { name: "ProjectFactory", address: projectFactoryReceipt.contractAddress }
   ];
 
@@ -72,8 +111,6 @@ const deploy = async () => {
   } catch (error) {
     console.error("\nError registering factories:", error.message);
   }
-
-  console.log("\nRemember to update your contract addresses in the frontend configuration!");
 };
 
 deploy().catch(console.error);

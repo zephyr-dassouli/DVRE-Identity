@@ -1,541 +1,556 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useFactoryRegistry } from './useFactoryRegistry';
-import ProjectFactoryABI from '../abis/ProjectFactory.json';
-import ProjectABI from '../abis/Project.json';
+import { useAuth } from './useAuth';
 
-export interface ProjectInfo {
-  address: string;
-  objective: string;
-  creator: string;
-  createdAt: number;
-  memberCount: number;
-  isMember: boolean;
-  hasPendingRequest?: boolean;
-  collaborativeTemplateId?: number;
-}
+import ProjectTemplateRegistry from '../abis/ProjectTemplateRegistry.json';
+import ProjectFactory from '../abis/ProjectFactory.json';
+import JSONProject from '../abis/JSONProject.json';
+import { RPC_URL } from '../config/contracts';
 
-export interface CollaborativeTemplate {
+export interface ProjectTemplate {
   id: number;
   name: string;
   description: string;
-  availableRoles: string[];
-  defaultOwnerRole: string;
+  projectType: string;
+  participantRoles: string[];
+  exampleJSON: string;
   isActive: boolean;
 }
 
+export interface ProjectMember {
+  address: string;
+  role: string;
+}
+
+export interface JoinRequest {
+  requester: string;
+  role: string;
+  timestamp: number;
+}
+
+export interface ProjectInfo {
+  address: string;
+  projectId: string;
+  objective: string;
+  description?: string;
+  creator: string;
+  isActive: boolean;
+  created: number;
+  lastModified: number;
+  participants: ProjectMember[];
+  joinRequests: JoinRequest[];
+  projectData: any; // Full parsed JSON
+  // UI helpers
+  isMember: boolean;
+  isOwner: boolean;
+  hasPendingRequest: boolean;
+  memberCount: number;
+}
+
 export interface ProjectDetails extends ProjectInfo {
-  members: Array<{
-    address: string;
-    role: string;
-    joinedAt: number;
-  }>;
   availableRoles: string[];
-  ownerRole: string;
 }
 
 export const useProjects = () => {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [userProjects, setUserProjects] = useState<ProjectInfo[]>([]);
-  const [collaborativeTemplates, setCollaborativeTemplates] = useState<CollaborativeTemplate[]>([]);
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { getFactoryAddress } = useFactoryRegistry();
+  const { getFactoryContract } = useFactoryRegistry();
+  const { account } = useAuth();
 
   const getProvider = () => {
+    return new ethers.JsonRpcProvider(RPC_URL);
+  };
+
+  const getSigner = async () => {
     if (!(window as any).ethereum) {
       throw new Error('MetaMask not found');
     }
-    return new ethers.BrowserProvider((window as any).ethereum);
+    const provider = new ethers.BrowserProvider((window as any).ethereum);
+    return await provider.getSigner();
   };
 
-  const getProjectFactory = async () => {
-    const provider = getProvider();
-    const signer = await provider.getSigner();
-    
-    // Get ProjectFactory address from registry
-    const projectFactoryAddress = await getFactoryAddress("ProjectFactory");
-    if (!projectFactoryAddress) {
-      throw new Error("ProjectFactory not found in registry");
-    }
-    
-    return new ethers.Contract(projectFactoryAddress, ProjectFactoryABI.abi, signer);
-  };
-
-  const getProjectContract = async (address: string) => {
-    const provider = getProvider();
-    return new ethers.Contract(address, ProjectABI.abi, provider);
-  };
-
-  const getProjectContractWithSigner = async (address: string) => {
-    const provider = getProvider();
-    const signer = await provider.getSigner();
-    return new ethers.Contract(address, ProjectABI.abi, signer);
-  };
-
-  // Join a project by submitting a join request
-  const requestToJoinProject = async (projectAddress: string, role: string) => {
+  // Get detailed project information
+  const getProjectInfo = useCallback(async (projectAddress: string): Promise<ProjectInfo | null> => {
     try {
-      setLoading(true);
-      setError(null);
-      
       const provider = getProvider();
-      const signer = await provider.getSigner();
-      const userAddress = await signer.getAddress();
+      const projectContract = new ethers.Contract(projectAddress, JSONProject.abi, provider);
+
+      // First, validate that this is a valid contract by checking if it has code
+      const code = await provider.getCode(projectAddress);
+      if (code === '0x') {
+        console.warn(`No contract code at address ${projectAddress}`);
+        return null;
+      }
+
+      // Try to call a simple read function first to validate the contract
+      try {
+        await projectContract.creator();
+      } catch (err) {
+        console.warn(`Address ${projectAddress} is not a valid JSONProject contract:`, err);
+        return null;
+      }
+
+      const projectDataString = await projectContract.getProjectData();
+      let projectData;
       
-      const project = await getProjectContractWithSigner(projectAddress);
-      
-      // Check if user is already a member
-      const isMember = await project.isMember(userAddress);
-      if (isMember) {
-        throw new Error('You are already a member of this project');
+      try {
+        projectData = JSON.parse(projectDataString);
+      } catch (parseErr) {
+        console.error(`Invalid JSON in project ${projectAddress}:`, parseErr);
+        return null;
       }
       
-      // Check if user already has a pending request
-      const hasPendingRequest = await project.hasPendingJoinRequest(userAddress);
-      if (hasPendingRequest) {
-        throw new Error('You already have a pending join request for this project');
+      // Get project status (returns: active, created, modified, creator)
+      const projectStatus = await projectContract.getProjectStatus();
+      const projectInfo = {
+        creator: projectStatus.projectCreator,
+        isActive: projectStatus.active,
+        created: Number(projectStatus.created),
+        lastModified: Number(projectStatus.modified)
+      };
+
+      // Extract participants from project data (address and role)
+      const participants: ProjectMember[] = [];
+      if (projectData.participants && Array.isArray(projectData.participants)) {
+        participants.push(...projectData.participants);
       }
-      
-      // Check if the role is valid
-      const availableRoles = await project.getAvailableRoles();
-      if (!availableRoles.includes(role)) {
-        throw new Error('Invalid role selected');
-      }
-      
-      // Submit join request
-      const tx = await project.requestToJoin(role);
-      await tx.wait();
-      
-      // Refresh projects list
-      await loadProjects();
-      await loadUserProjects();
-      
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to submit join request');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const createProject = async (objective: string, availableRoles: string[], ownerRole: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const factory = await getProjectFactory();
-      const tx = await factory.createProject(objective, availableRoles, ownerRole);
-      await tx.wait();
-      
-      // Refresh projects list
-      await loadProjects();
-      await loadUserProjects();
-      
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to create project');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const createProjectFromCollaborativeTemplate = async (collaborativeTemplateId: number, objective: string, ownerRole: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const factory = await getProjectFactory();
-      const tx = await factory.createProjectFromTemplate(collaborativeTemplateId, objective, ownerRole);
-      await tx.wait();
-      
-      // Refresh projects list
-      await loadProjects();
-      await loadUserProjects();
-      
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to create project from template');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const factory = await getProjectFactory();
-      const projectAddresses = await factory.getAllProjects();
-      
-      const projectsInfo: ProjectInfo[] = [];
-      
-      for (const address of projectAddresses) {
-        const project = await getProjectContract(address);
-        const objective = await project.objective();
-        const creator = await project.creator();
-        const createdAt = await project.createdAt();
-        const memberCount = await project.getActiveMemberCount();
-        
-        // Check if current user is a member
-        const provider = getProvider();
-        const signer = await provider.getSigner();
-        const userAddress = await signer.getAddress();
-        const isMember = await project.isMember(userAddress);
-        
-        // Check if user has a pending join request
-        let hasPendingRequest = false;
-        if (!isMember) {
-          try {
-            hasPendingRequest = await project.hasPendingJoinRequest(userAddress);
-          } catch (err) {
-            // If there's an error checking pending request, default to false
-            hasPendingRequest = false;
+      // Get join requests from contract
+      const joinRequests: JoinRequest[] = [];
+      try {
+        const requesters = await projectContract.getAllRequesters();
+        for (const requester of requesters) {
+          const request = await projectContract.getJoinRequest(requester);
+          if (request.exists) {
+            joinRequests.push({
+              requester: request.requester,
+              role: request.role,
+              timestamp: Number(request.timestamp)
+            });
           }
         }
-        // Get collaborative template ID
-        let collaborativeTemplateId;
+      } catch (err) {
+        console.warn('Failed to get join requests:', err);
+      }
+
+      // Find the user's membership (might be owner or regular member)
+      const userParticipant = participants.find(p => p.address.toLowerCase() === account?.toLowerCase());
+      const isOwner = projectInfo.creator.toLowerCase() === account?.toLowerCase();
+      const isMember = !!userParticipant || isOwner;
+      const hasPendingRequest = joinRequests.some(r => r.requester.toLowerCase() === account?.toLowerCase());
+
+      // Count of participants in the project
+      const memberCount = participants.length;
+
+      return {
+        address: projectAddress,
+        projectId: projectData.project_id || projectData.projectId || 'Unknown',
+        objective: projectData.objective || 'No objective specified',
+        description: projectData.description,
+        creator: projectInfo.creator,
+        isActive: projectInfo.isActive,
+        created: Number(projectInfo.created),
+        lastModified: Number(projectInfo.lastModified),
+        participants,
+        joinRequests,
+        projectData,
+        isMember,
+        isOwner,
+        hasPendingRequest,
+        memberCount
+      };
+    } catch (err) {
+      console.error(`Failed to get project info for ${projectAddress}:`, err);
+      return null;
+    }
+  }, [account]);
+
+  // Load all projects
+  const loadProjects = useCallback(async () => {
+    if (!account) return;
+    
+    setLoading(true);
+    setError(null);
+
+    try {
+      const factoryContract = await getFactoryContract(
+        "ProjectFactory",
+        ProjectFactory.abi
+      );
+
+      if (!factoryContract) {
+        throw new Error("ProjectFactory not found");
+      }
+
+      const projectAddresses = await factoryContract.getAllProjects();
+      const allProjects: ProjectInfo[] = [];
+
+      for (let i = 0; i < projectAddresses.length; i++) {
         try {
-          collaborativeTemplateId = await project.getTemplateId();
-          collaborativeTemplateId = Number(collaborativeTemplateId);
-          console.log('Project template ID:', collaborativeTemplateId, 'for project:', address);
+          const projectInfo = await getProjectInfo(projectAddresses[i]);
+          if (projectInfo) {
+            allProjects.push(projectInfo);
+          }
         } catch (err) {
-          console.log('Failed to get template ID for project:', address, err);
-          collaborativeTemplateId = 999999; // Default for custom projects
+          console.warn(`Failed to load project at address ${projectAddresses[i]}:`, err);
         }
-        
-        projectsInfo.push({
-          address,
-          objective,
-          creator,
-          createdAt: Number(createdAt),
-          memberCount: Number(memberCount),
-          isMember,
-          hasPendingRequest,
-          collaborativeTemplateId
+      }
+
+      // Separate user projects from all projects
+      const userProjectsList = allProjects.filter(p => p.isMember || p.isOwner);
+      const availableProjectsList = allProjects.filter(p => !p.isMember && !p.isOwner);
+
+      setUserProjects(userProjectsList);
+      setProjects(availableProjectsList);
+      setLoading(false);
+    } catch (err: any) {
+      setError(`Failed to load projects: ${err.message}`);
+      setLoading(false);
+    }
+  }, [account, getFactoryContract, getProjectInfo]);
+
+  // Load project templates
+  const loadTemplates = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const templateRegistryContract = await getFactoryContract(
+        "ProjectTemplateRegistry",
+        ProjectTemplateRegistry.abi
+      );
+
+      if (!templateRegistryContract) {
+        throw new Error("ProjectTemplateRegistry not found");
+      }
+
+      const templateCount = await templateRegistryContract.getTemplateCount();
+      const loadedTemplates: ProjectTemplate[] = [];
+
+      for (let i = 0; i < templateCount; i++) {
+        const template = await templateRegistryContract.getTemplate(i);
+        loadedTemplates.push({
+          id: i,
+          name: template[0],
+          description: template[1],
+          projectType: template[2],
+          participantRoles: template[3],
+          exampleJSON: template[4],
+          isActive: template[5]
         });
       }
-      
-      setProjects(projectsInfo);
+
+      setTemplates(loadedTemplates.filter(t => t.isActive));
+      setLoading(false);
     } catch (err: any) {
-      setError(err.message || 'Failed to load projects');
-    } finally {
+      setError(`Failed to load templates: ${err.message}`);
       setLoading(false);
     }
-  };
+  }, [getFactoryContract]);
 
-  const loadUserProjects = async () => {
+  // Request to join a project (uses contract's join request system)
+  const requestToJoinProject = useCallback(async (projectAddress: string, role: string): Promise<boolean> => {
+    if (!account) return false;
+
+    try {
+      const signer = await getSigner();
+      const projectContract = new ethers.Contract(projectAddress, JSONProject.abi, signer);
+
+      // Check if user already has a pending request or is already a member
+      const projectInfo = await getProjectInfo(projectAddress);
+      if (!projectInfo) {
+        throw new Error('Project not found');
+      }
+
+      if (projectInfo.isOwner) {
+        throw new Error('You are the owner of this project');
+      }
+
+      if (projectInfo.isMember) {
+        throw new Error('You are already a member of this project');
+      }
+
+      if (projectInfo.hasPendingRequest) {
+        throw new Error('You already have a pending request for this project');
+      }
+
+      // Submit join request to contract
+      const tx = await projectContract.submitJoinRequest(role);
+      await tx.wait();
+
+      console.log('Join request submitted successfully');
+      return true;
+    } catch (err: any) {
+      console.error('Failed to request join:', err);
+      setError(`Failed to request join: ${err.message}`);
+      return false;
+    }
+  }, [account, getProjectInfo]);
+
+  // Approve/reject join request (project owner only)
+  const handleJoinRequest = useCallback(async (
+    projectAddress: string, 
+    memberAddress: string, 
+    approve: boolean
+  ): Promise<boolean> => {
+    if (!account) return false;
+
+    try {
+      const signer = await getSigner();
+      const projectContract = new ethers.Contract(projectAddress, JSONProject.abi, signer);
+
+      if (approve) {
+        // Get the join request details first
+        const request = await projectContract.getJoinRequest(memberAddress);
+        if (!request.exists) {
+          throw new Error('Join request not found');
+        }
+
+        // Get current project data
+        const projectDataString = await projectContract.getProjectData();
+        const projectData = JSON.parse(projectDataString);
+
+        // Initialize participants array if it doesn't exist
+        if (!projectData.participants) {
+          projectData.participants = [];
+        }
+
+        // Add the new member to participants
+        projectData.participants.push({
+          address: memberAddress,
+          role: request.role
+        });
+
+        // Update project data
+        const newProjectDataString = JSON.stringify(projectData);
+        const updateTx = await projectContract.updateProjectData(newProjectDataString);
+        await updateTx.wait();
+
+        // Approve the join request (this removes it from the contract)
+        const approveTx = await projectContract.approveJoinRequest(memberAddress);
+        await approveTx.wait();
+      } else {
+        // Just reject the join request (this removes it from the contract)
+        const rejectTx = await projectContract.rejectJoinRequest(memberAddress);
+        await rejectTx.wait();
+      }
+
+      console.log(`Join request ${approve ? 'approved' : 'rejected'} for ${memberAddress}`);
+      return true;
+    } catch (err: any) {
+      console.error('Failed to handle join request:', err);
+      setError(`Failed to handle join request: ${err.message}`);
+      return false;
+    }
+  }, [account]);
+
+  // Create project from template
+  const createProjectFromTemplate = useCallback(async (
+    templateId: number,
+    projectData: any
+  ): Promise<string | null> => {
+    try {
+      const signer = await getSigner();
+      const factoryContract = await getFactoryContract(
+        "ProjectFactory",
+        ProjectFactory.abi,
+        signer
+      );
+
+      if (!factoryContract) {
+        throw new Error("ProjectFactory not found");
+      }
+
+      // Ensure participants array exists
+      if (!projectData.participants) {
+        projectData.participants = [];
+      }
+
+      // Remove creator from participants if accidentally included
+      projectData.participants = projectData.participants.filter(
+        (p: ProjectMember) => p.address.toLowerCase() !== account?.toLowerCase()
+      );
+
+      // Add the creator to participants with a role (commonly "Owner")
+      if (account) {
+        projectData.participants.push({
+          address: account,
+          role: "Owner" // Can be configured based on project needs
+        });
+      }
+
+      const projectDataString = JSON.stringify(projectData);
+      const tx = await factoryContract.createProjectFromTemplate(templateId, projectDataString);
+      const receipt = await tx.wait();
+
+      // Find the project creation event
+      const factoryInterface = new ethers.Interface(ProjectFactory.abi);
+      const projectCreatedEvent = receipt.logs.find((log: any) => {
+        try {
+          const parsed = factoryInterface.parseLog(log);
+          return parsed?.name === 'ProjectCreated';
+        } catch {
+          return false;
+        }
+      });
+
+      if (projectCreatedEvent) {
+        const parsedEvent = factoryInterface.parseLog(projectCreatedEvent);
+        return parsedEvent?.args[0]; // project address
+      }
+
+      return null;
+    } catch (err: any) {
+      console.error('Failed to create project:', err);
+      setError(`Failed to create project: ${err.message}`);
+      return null;
+    }
+  }, [account, getFactoryContract]);
+
+  // Create custom project
+  const createCustomProject = useCallback(async (projectData: any): Promise<string | null> => {
+    try {
+      const signer = await getSigner();
+      const factoryContract = await getFactoryContract(
+        "ProjectFactory",
+        ProjectFactory.abi,
+        signer
+      );
+
+      if (!factoryContract) {
+        throw new Error("ProjectFactory not found");
+      }
+
+      // Ensure participants array exists
+      if (!projectData.participants) {
+        projectData.participants = [];
+      }
+
+      // Remove creator from participants if accidentally included
+      projectData.participants = projectData.participants.filter(
+        (p: ProjectMember) => p.address.toLowerCase() !== account?.toLowerCase()
+      );
+
+      // Add the creator to participants with a role (commonly "Owner")
+      if (account) {
+        projectData.participants.push({
+          address: account,
+          role: "Owner" // Can be configured based on project needs
+        });
+      }
+
+      const projectDataString = JSON.stringify(projectData);
+      const tx = await factoryContract.createCustomProject(projectDataString);
+      const receipt = await tx.wait();
+
+      // Find the project creation event
+      const factoryInterface = new ethers.Interface(ProjectFactory.abi);
+      const projectCreatedEvent = receipt.logs.find((log: any) => {
+        try {
+          const parsed = factoryInterface.parseLog(log);
+          return parsed?.name === 'ProjectCreated';
+        } catch {
+          return false;
+        }
+      });
+
+      if (projectCreatedEvent) {
+        const parsedEvent = factoryInterface.parseLog(projectCreatedEvent);
+        return parsedEvent?.args[0]; // project address
+      }
+
+      return null;
+    } catch (err: any) {
+      console.error('Failed to create custom project:', err);
+      setError(`Failed to create custom project: ${err.message}`);
+      return null;
+    }
+  }, [account, getFactoryContract]);
+
+  // Get project roles (extracted from project data)
+  const getProjectRoles = useCallback(async (projectAddress: string): Promise<string[]> => {
+    try {
+      const projectInfo = await getProjectInfo(projectAddress);
+      if (!projectInfo) return [];
+
+      // Extract unique roles from participants, excluding owner
+      const roles = new Set<string>();
+      projectInfo.participants.forEach(participant => {
+        if (participant.role && participant.role !== 'Owner') {
+          roles.add(participant.role);
+        }
+      });
+
+      // Add common roles if not present
+      const commonRoles = ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];
+      commonRoles.forEach(role => roles.add(role));
+
+      return Array.from(roles);
+    } catch (err) {
+      console.error('Failed to get project roles:', err);
+      return ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];
+    }
+  }, [getProjectInfo]);
+
+  // Get join requests for a project
+  const getJoinRequests = useCallback(async (projectAddress: string): Promise<JoinRequest[]> => {
     try {
       const provider = getProvider();
-      const signer = await provider.getSigner();
-      const userAddress = await signer.getAddress();
-      
-      const factory = await getProjectFactory();
-      
-      // Get all projects and check which ones the user is a member of
-      const allProjectAddresses = await factory.getAllProjects();
-      const userProjectsInfo: ProjectInfo[] = [];
-      
-      for (const address of allProjectAddresses) {
-        const project = await getProjectContract(address);
-        
-        // Check if user is a member of this project
-        const isMember = await project.isMember(userAddress);
-        
-        if (isMember) {
-          const objective = await project.objective();
-          const creator = await project.creator();
-          const createdAt = await project.createdAt();
-          const memberCount = await project.getActiveMemberCount();
-          
-          // Get collaborative template ID
-          let collaborativeTemplateId;
-          try {
-            collaborativeTemplateId = await project.getTemplateId();
-            collaborativeTemplateId = Number(collaborativeTemplateId);
-          } catch (err) {
-            collaborativeTemplateId = 999999; // Default for custom projects
-          }
-          
-          userProjectsInfo.push({
-            address,
-            objective,
-            creator,
-            createdAt: Number(createdAt),
-            memberCount: Number(memberCount),
-            isMember: true,
-            hasPendingRequest: false,
-            collaborativeTemplateId
+      const projectContract = new ethers.Contract(projectAddress, JSONProject.abi, provider);
+
+      const requesters = await projectContract.getAllRequesters();
+      const joinRequests: JoinRequest[] = [];
+
+      for (const requester of requesters) {
+        const request = await projectContract.getJoinRequest(requester);
+        if (request.exists) {
+          joinRequests.push({
+            requester: request.requester,
+            role: request.role,
+            timestamp: Number(request.timestamp)
           });
         }
       }
-      
-      setUserProjects(userProjectsInfo);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load user projects');
-    }
-  };
 
-  const loadCollaborativeTemplates = async () => {
-    try {
-      const factory = await getProjectFactory();
-      const result = await factory.getAllTemplates();
-      
-      const collaborativeTemplatesInfo: CollaborativeTemplate[] = [];
-      for (let i = 0; i < result.ids.length; i++) {
-        const templateDetails = await factory.getTemplate(result.ids[i]);
-        collaborativeTemplatesInfo.push({
-          id: Number(result.ids[i]),
-          name: result.names[i],
-          description: result.descriptions[i],
-          availableRoles: templateDetails.availableRoles,
-          defaultOwnerRole: templateDetails.defaultOwnerRole,
-          isActive: result.isActiveList[i]
-        });
-      }
-      
-      console.log('Loaded collaborative templates:', collaborativeTemplatesInfo);
-      setCollaborativeTemplates(collaborativeTemplatesInfo);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load collaborative templates');
-    }
-  };
-
-  const getProjectsByCollaborativeTemplate = async (collaborativeTemplateId: number): Promise<ProjectInfo[]> => {
-    try {
-      const factory = await getProjectFactory();
-      const projectAddresses = await factory.getProjectsByTemplate(collaborativeTemplateId);
-      
-      const projectsInfo: ProjectInfo[] = [];
-      
-      for (const address of projectAddresses) {
-        const project = await getProjectContract(address);
-        const objective = await project.objective();
-        const creator = await project.creator();
-        const createdAt = await project.createdAt();
-        const memberCount = await project.getActiveMemberCount();
-        
-        // Check if current user is a member
-        const provider = getProvider();
-        const signer = await provider.getSigner();
-        const userAddress = await signer.getAddress();
-        const isMember = await project.isMember(userAddress);
-        
-        // Check if user has a pending join request
-        let hasPendingRequest = false;
-        if (!isMember) {
-          try {
-            hasPendingRequest = await project.hasPendingJoinRequest(userAddress);
-          } catch (err) {
-            hasPendingRequest = false;
-          }
-        }
-        
-        projectsInfo.push({
-          address,
-          objective,
-          creator,
-          createdAt: Number(createdAt),
-          memberCount: Number(memberCount),
-          isMember,
-          hasPendingRequest,
-          collaborativeTemplateId
-        });
-      }
-      
-      return projectsInfo;
-    } catch (err: any) {
-      setError(err.message || 'Failed to load projects by template');
+      return joinRequests;
+    } catch (err) {
+      console.error('Failed to get join requests:', err);
       return [];
-    }
-  };
-
-  const getProjectDetails = useCallback(async (address: string): Promise<ProjectDetails | null> => {
-    try {
-      const project = await getProjectContract(address);
-      
-      const objective = await project.objective();
-      const creator = await project.creator();
-      const createdAt = await project.createdAt();
-      const memberAddresses = await project.getAllMembers();
-      const availableRoles = await project.getAvailableRoles();
-      const ownerRole = await project.getOwnerRole();
-      
-      const members = [];
-      for (const memberAddress of memberAddresses) {
-        const memberInfo = await project.getMember(memberAddress);
-        members.push({
-          address: memberAddress,
-          role: memberInfo.role,
-          joinedAt: Number(memberInfo.joinedAt)
-        });
-      }
-      
-      const provider = getProvider();
-      const signer = await provider.getSigner();
-      const userAddress = await signer.getAddress();
-      const isMember = await project.isMember(userAddress);
-      
-      return {
-        address,
-        objective,
-        creator,
-        createdAt: Number(createdAt),
-        memberCount: members.length,
-        isMember,
-        members,
-        availableRoles,
-        ownerRole
-      };
-    } catch (err: any) {
-      setError(err.message || 'Failed to get project details');
-      return null;
-    }
-  }, []); // Empty dependency array since getProjectContract doesn't depend on state
-
-  // Get pending join requests for a project (for project creators)
-  const getPendingJoinRequests = async (projectAddress: string) => {
-    try {
-      const project = await getProjectContract(projectAddress);
-      const pendingAddresses = await project.getPendingJoinRequests();
-      
-      const requests = [];
-      for (const address of pendingAddresses) {
-        const requestInfo = await project.getJoinRequest(address);
-        requests.push({
-          requester: requestInfo.requester,
-          requestedRole: requestInfo.requestedRole,
-          requestedAt: Number(requestInfo.requestedAt),
-          isPending: requestInfo.isPending
-        });
-      }
-      
-      return requests;
-    } catch (err: any) {
-      setError(err.message || 'Failed to get join requests');
-      return [];
-    }
-  };
-
-  // Approve a join request (for project creators)
-  const approveJoinRequest = async (projectAddress: string, requesterAddress: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const project = await getProjectContractWithSigner(projectAddress);
-      const tx = await project.approveJoinRequest(requesterAddress);
-      await tx.wait();
-      
-      // Refresh projects list
-      await loadProjects();
-      await loadUserProjects();
-      
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to approve join request');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Reject a join request (for project creators)
-  const rejectJoinRequest = async (projectAddress: string, requesterAddress: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const project = await getProjectContractWithSigner(projectAddress);
-      const tx = await project.rejectJoinRequest(requesterAddress);
-      await tx.wait();
-      
-      return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to reject join request');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Check if user has a pending join request for a project
-  const hasPendingJoinRequest = async (projectAddress: string, userAddress?: string) => {
-    try {
-      if (!userAddress) {
-        const provider = getProvider();
-        const signer = await provider.getSigner();
-        userAddress = await signer.getAddress();
-      }
-      
-      const project = await getProjectContract(projectAddress);
-      return await project.hasPendingJoinRequest(userAddress);
-    } catch (err: any) {
-      return false;
-    }
-  };
-
-  // Get available roles for a project
-  const getProjectRoles = async (projectAddress: string): Promise<string[]> => {
-    try {
-      const project = await getProjectContract(projectAddress);
-      return await project.getAvailableRoles();
-    } catch (err: any) {
-      setError(err.message || 'Failed to get project roles');
-      return [];
-    }
-  };
-
-  // Helper function to get template name by ID
-  const getCollaborativeTemplateName = (templateId: number): string => {
-    if (templateId === 999999) return 'Custom Project';
-    
-    const template = collaborativeTemplates.find(t => t.id === templateId);
-    console.log('Looking for template ID:', templateId, 'in templates:', collaborativeTemplates, 'found:', template);
-    
-    if (template) {
-      return template.name;
-    }
-    
-    // If templates haven't loaded yet or template not found
-    if (collaborativeTemplates.length === 0) {
-      return 'Loading...';
-    }
-    
-    return `Unknown Template (ID: ${templateId})`;
-  };
-
-  useEffect(() => {
-    if ((window as any).ethereum) {
-      loadCollaborativeTemplates().then(() => {
-        // Load projects after templates are loaded
-        loadProjects();
-        loadUserProjects();
-      });
     }
   }, []);
 
+  // Initialize data on mount
+  useEffect(() => {
+    if (account) {
+      loadProjects();
+      loadTemplates();
+    }
+  }, [account, loadProjects, loadTemplates]);
+
   return {
+    // State
     projects,
     userProjects,
-    collaborativeTemplates,
+    templates,
     loading,
     error,
-    createProject,
-    createProjectFromCollaborativeTemplate,
+
+    // Methods
     loadProjects,
-    loadUserProjects,
-    loadCollaborativeTemplates,
-    getProjectDetails,
+    loadTemplates,
+    getProjectInfo,
+    getJoinRequests,
     requestToJoinProject,
+    handleJoinRequest,
+    createProjectFromTemplate,
+    createCustomProject,
     getProjectRoles,
-    getPendingJoinRequests,
-    approveJoinRequest,
-    rejectJoinRequest,
-    hasPendingJoinRequest,
-    getProjectsByCollaborativeTemplate,
-    getCollaborativeTemplateName
+
+    // Utility
+    clearError: () => setError(null)
   };
 };

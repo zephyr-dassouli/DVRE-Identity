@@ -16,7 +16,7 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
   title = 'Project Collaboration' 
 }) => {
   const { account } = useAuth();
-  const { projects, userProjects, loading, error, requestToJoinProject, getProjectRoles, loadProjects, loadUserProjects } = useProjects();
+  const { projects, userProjects, loading, error, requestToJoinProject, getProjectRoles, loadProjects } = useProjects();
   const [viewMode, setViewMode] = useState<ViewMode>('main');
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [projectToJoin, setProjectToJoin] = useState<ProjectInfo | null>(null);
@@ -76,7 +76,7 @@ export const CollaborationComponent: React.FC<CollaborationComponentProps> = ({
 
   const handleRefreshProjects = async () => {
     try {
-      await Promise.all([loadProjects(), loadUserProjects()]);
+      await loadProjects();
     } catch (error) {
       console.error('Failed to refresh projects:', error);
     }

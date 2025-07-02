@@ -96,9 +96,15 @@ export function useFactoryRegistry() {
     }
   }, []);
 
-  // Get all known factory addresses (commonly used ones)
+  // Get all known factory addresses
   const getKnownFactories = useCallback(async (): Promise<FactoryInfo[]> => {
-    const knownFactoryNames = ["ProjectFactory", "UserMetadataFactory"];
+    const knownFactoryNames = [
+      // JSON project system contracts
+      "ProjectTemplateRegistry",
+      "ProjectFactory",
+      // User management contracts
+      "UserMetadataFactory"
+    ];
     return getMultipleFactories(knownFactoryNames);
   }, [getMultipleFactories]);
 

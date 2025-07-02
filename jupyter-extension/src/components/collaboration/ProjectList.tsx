@@ -1,5 +1,5 @@
 import React from 'react';
-import { ProjectInfo, useProjects } from '../../hooks/useProjects';
+import { ProjectInfo } from '../../hooks/useProjects';
 
 interface ProjectListProps {
   projects: ProjectInfo[];
@@ -14,7 +14,6 @@ export const ProjectList: React.FC<ProjectListProps> = ({
   onSelectProject,
   loading = false 
 }) => {
-  const { getCollaborativeTemplateName } = useProjects();
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -102,10 +101,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                 color: 'var(--jp-ui-font-color2)',
                 marginBottom: '4px'
               }}>
-                <strong>Type:</strong> {(() => {
-                  console.log('ProjectList: project.collaborativeTemplateId =', project.collaborativeTemplateId);
-                  return project.collaborativeTemplateId ? getCollaborativeTemplateName(project.collaborativeTemplateId) : 'Custom Project';
-                })()}
+                <strong>Type:</strong> {project.projectData?.type || 'General Project'}
               </div>
               
               <div style={{ 
@@ -131,7 +127,7 @@ export const ProjectList: React.FC<ProjectListProps> = ({
                 color: 'var(--jp-ui-font-color3)',
                 marginTop: '4px'
               }}>
-                Created: {new Date(project.createdAt * 1000).toLocaleDateString()}
+                Created: {new Date(project.created * 1000).toLocaleDateString()}
               </div>
             </div>
           ))}

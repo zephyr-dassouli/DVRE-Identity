@@ -88,7 +88,7 @@ export const JoinProjectDialog: React.FC<JoinProjectDialogProps> = ({
             <strong>Creator:</strong> {project.creator.slice(0, 6)}...{project.creator.slice(-4)}
           </div>
           <div style={{ color: 'var(--jp-ui-font-color1)', marginBottom: '4px' }}>
-            <strong>Created:</strong> {new Date(project.createdAt * 1000).toLocaleDateString()}
+            <strong>Created:</strong> {new Date(project.created * 1000).toLocaleDateString()}
           </div>
           <div style={{ color: 'var(--jp-ui-font-color1)' }}>
             <strong>Members:</strong> {project.memberCount}

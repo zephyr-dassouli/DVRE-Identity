@@ -2,24 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
-
-import ProjectFactory from "../abis/ProjectFactory.json";
-import Project from "../abis/Project.json";
-import UserMetadataFactory from "../abis/UserMetadataFactory.json";
 import { useFactoryRegistry } from "./useFactoryRegistry";
+import UserMetadataFactory from "../abis/UserMetadataFactory.json";
 
 export function useAuth() {
   const [account, setAccount] = useState<string | null>(null);
-  const [projects, setProjects] = useState<{ address: string; name: string }[]>([]);
   const { getFactoryAddress } = useFactoryRegistry();
 
   useEffect(() => {
     const stored = sessionStorage.getItem("auth");
     if (stored) {
-      const { account, projects } = JSON.parse(stored);
+      const { account } = JSON.parse(stored);
       setAccount(account);
-      setProjects(projects);
-      console.log("Restored session:", { account, projects });
+      console.log("Restored session:", { account });
     }
   }, []);
 
@@ -30,39 +25,12 @@ export function useAuth() {
     const signer = await provider.getSigner();
     const addr = await signer.getAddress();
 
-    // Get ProjectFactory address from registry
-    const projectFactoryAddress = await getFactoryAddress("ProjectFactory");
-    if (!projectFactoryAddress) {
-      console.error("Failed to get ProjectFactory address from registry");
-      return;
-    }
-
-    const factoryContract = new ethers.Contract(projectFactoryAddress, ProjectFactory.abi, provider);
-    const projectAddresses: string[] = await factoryContract.getAllProjects();
-
-    const projectDetails: { address: string; name: string }[] = [];
-
-    for (const projectAddr of projectAddresses) {
-      const projectContract = new ethers.Contract(projectAddr, Project.abi, provider);
-      try {
-        const isMember = await projectContract.isMember(addr);
-        if (isMember) {
-          const name = await projectContract.getName(); // This returns the objective which serves as the project name
-          projectDetails.push({ address: projectAddr, name });
-        }
-      } catch (err) {
-        console.warn(`Error checking project ${projectAddr}`, err);
-      }
-    }
-
     setAccount(addr);
-    setProjects(projectDetails);
-    sessionStorage.setItem("auth", JSON.stringify({ account: addr, projects: projectDetails }));
+    sessionStorage.setItem("auth", JSON.stringify({ account: addr }));
   };
 
   const disconnect = () => {
     setAccount(null);
-    setProjects([]);
     sessionStorage.removeItem("auth");
   };
 
@@ -89,7 +57,6 @@ export function useAuth() {
     try {
       const tx = await userMetadataFactory.registerUser(email, name, institution);
       await tx.wait();
-      // Optionally, you can refresh or fetch user metadata here
       return true;
     } catch (err) {
       console.error("Registration failed:", err);
@@ -97,7 +64,7 @@ export function useAuth() {
     }
   };
 
-  // Get factory address from registry (alternative to hardcoded addresses)
+  // Get factory address from registry
   const getFactoryFromRegistry = async (factoryName: string) => {
     try {
       const address = await getFactoryAddress(factoryName);
@@ -108,5 +75,5 @@ export function useAuth() {
     }
   };
 
-  return { account, projects, connect, disconnect, register, getFactoryFromRegistry };
+  return { account, connect, disconnect, register, getFactoryFromRegistry };
 }

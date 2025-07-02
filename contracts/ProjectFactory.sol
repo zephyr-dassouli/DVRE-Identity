@@ -1,157 +1,70 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "./Project.sol";
+import "./JSONProject.sol";
+import "./ProjectTemplateRegistry.sol";
 
 contract ProjectFactory {
-    // Structs
-    struct ProjectTemplate {
-        string name;
-        string description;
-        string[] availableRoles;
-        string defaultOwnerRole;
-        bool isActive;
-    }
-
+    // Reference to the template registry
+    ProjectTemplateRegistry public templateRegistry;
+    
     // Events
     event ProjectCreated(
         address indexed creator,
         address indexed projectAddress,
-        string objective,
+        string projectType,
         uint256 templateId,
         uint256 timestamp
     );
 
-    event TemplateCreated(
-        uint256 indexed templateId,
-        string name,
-        string description,
-        uint256 timestamp
-    );
-
     // State variables
-    ProjectTemplate[] public templates;
-    mapping(uint256 => address[]) public templateProjects; // templateId => project addresses
-    mapping(address => address[]) public userProjects; // user => project addresses (for backward compatibility)
+    mapping(address => address[]) public userProjects; // user => project addresses
     mapping(address => bool) public isProject;
     address[] public allProjects;
 
-    constructor() {
-        // Add Federated Learning collaboration template
-        string[] memory flRoles = new string[](2);
-        flRoles[0] = "Data Owner";
-        flRoles[1] = "Model Owner";
-        _createTemplate(
-            "Federated Learning",
-            "Collaborative machine learning D-App where data remains distributed",
-            flRoles,
-            "Model Owner"
-        );
-    }
-
-    // Internal function to create a template
-    function _createTemplate(
-        string memory _name,
-        string memory _description,
-        string[] memory _availableRoles,
-        string memory _defaultOwnerRole
-    ) internal {
-        require(bytes(_name).length > 0, "Template name cannot be empty");
-        require(_availableRoles.length > 0, "At least one role must be defined");
-        
-        // Verify that the default owner role is in the available roles
-        bool validOwnerRole = false;
-        for (uint256 i = 0; i < _availableRoles.length; i++) {
-            if (keccak256(bytes(_availableRoles[i])) == keccak256(bytes(_defaultOwnerRole))) {
-                validOwnerRole = true;
-                break;
-            }
-        }
-        require(validOwnerRole, "Default owner role must be one of the available roles");
-
-        templates.push(ProjectTemplate({
-            name: _name,
-            description: _description,
-            availableRoles: _availableRoles,
-            defaultOwnerRole: _defaultOwnerRole,
-            isActive: true
-        }));
-
-        emit TemplateCreated(templates.length - 1, _name, _description, block.timestamp);
+    constructor(address _templateRegistry) {
+        require(_templateRegistry != address(0), "Template registry address cannot be zero");
+        templateRegistry = ProjectTemplateRegistry(_templateRegistry);
     }
 
     // Create a new project using a template
     function createProjectFromTemplate(
         uint256 _templateId,
-        string memory _objective,
-        string memory _ownerRole
+        string memory _projectData
     ) external returns (address) {
-        require(_templateId < templates.length, "Template does not exist");
-        require(templates[_templateId].isActive, "Template is not active");
-        require(bytes(_objective).length > 0, "Project objective cannot be empty");
-        
-        ProjectTemplate memory template = templates[_templateId];
-        
-        // Verify that the chosen owner role is in the template's available roles
-        bool validOwnerRole = false;
-        for (uint256 i = 0; i < template.availableRoles.length; i++) {
-            if (keccak256(bytes(template.availableRoles[i])) == keccak256(bytes(_ownerRole))) {
-                validOwnerRole = true;
-                break;
-            }
-        }
-        require(validOwnerRole, "Owner role must be one of the template's available roles");
+        // Validate template exists and is active
+        (,, string memory projectType,, , bool isActive) = templateRegistry.getTemplate(_templateId);
+        require(isActive, "Template is not active");
+        require(bytes(_projectData).length > 0, "Project data cannot be empty");
 
-        // Deploy new Project contract
-        Project newProject = new Project(
+        // Deploy new JSONProject contract
+        JSONProject newProject = new JSONProject(
             msg.sender,
-            _objective,
-            template.availableRoles,
-            _ownerRole
+            _projectData
         );
 
         address projectAddress = address(newProject);
-
-        // Set the template ID
-        newProject.setTemplateId(_templateId);
 
         // Update mappings
         userProjects[msg.sender].push(projectAddress);
         isProject[projectAddress] = true;
         allProjects.push(projectAddress);
-        templateProjects[_templateId].push(projectAddress);
 
-        emit ProjectCreated(msg.sender, projectAddress, _objective, _templateId, block.timestamp);
+        emit ProjectCreated(msg.sender, projectAddress, projectType, _templateId, block.timestamp);
 
         return projectAddress;
     }
 
-    // Create a new project (legacy function - creates custom project)
-    function createProject(
-        string memory _objective,
-        string[] memory _availableRoles,
-        string memory _ownerRole
+    // Create a custom project (no specific template)
+    function createCustomProject(
+        string memory _projectData
     ) external returns (address) {
-        require(bytes(_objective).length > 0, "Project objective cannot be empty");
-        require(_availableRoles.length > 0, "At least one role must be defined");
-        require(bytes(_ownerRole).length > 0, "Owner role cannot be empty");
-        
-        // Verify that the chosen owner role is in the available roles
-        bool validOwnerRole = false;
-        for (uint256 i = 0; i < _availableRoles.length; i++) {
-            if (keccak256(bytes(_availableRoles[i])) == keccak256(bytes(_ownerRole))) {
-                validOwnerRole = true;
-                break;
-            }
-        }
-        require(validOwnerRole, "Owner role must be one of the available roles");
+        require(bytes(_projectData).length > 0, "Project data cannot be empty");
 
-        // Deploy new Project contract
-        Project newProject = new Project(
+        // Deploy new JSONProject contract
+        JSONProject newProject = new JSONProject(
             msg.sender,
-            _objective,
-            _availableRoles,
-            _ownerRole
+            _projectData
         );
 
         address projectAddress = address(newProject);
@@ -161,9 +74,73 @@ contract ProjectFactory {
         isProject[projectAddress] = true;
         allProjects.push(projectAddress);
 
-        emit ProjectCreated(msg.sender, projectAddress, _objective, 999999, block.timestamp); // Use 999999 as templateId for custom projects
+        emit ProjectCreated(msg.sender, projectAddress, "custom", 999999, block.timestamp);
 
         return projectAddress;
+    }
+
+    // Create project with automatic JSON generation from basic parameters
+    function createProjectFromBasicInfo(
+        uint256 _templateId,
+        string memory _projectId,
+        string memory _objective,
+        address[] memory _participantAddresses,
+        string[] memory _participantRoles
+    ) external returns (address) {
+        require(_participantAddresses.length == _participantRoles.length, "Participants and roles length mismatch");
+        
+        // Get template info
+        (, , string memory projectType, , , bool isActive) = templateRegistry.getTemplate(_templateId);
+        require(isActive, "Template is not active");
+
+        // Build basic JSON structure
+        string memory participantsJson = _buildParticipantsJson(_participantAddresses, _participantRoles);
+        string memory projectData = string(abi.encodePacked(
+            '{"project_id":"', _projectId, '",',
+            '"type":"', projectType, '",',
+            '"objective":"', _objective, '",',
+            '"participants":', participantsJson,
+            '}'
+        ));
+
+        return this.createProjectFromTemplate(_templateId, projectData);
+    }
+
+    // Helper function to build participants JSON
+    function _buildParticipantsJson(
+        address[] memory _addresses,
+        string[] memory _roles
+    ) internal pure returns (string memory) {
+        if (_addresses.length == 0) {
+            return "[]";
+        }
+
+        string memory result = "[";
+        for (uint256 i = 0; i < _addresses.length; i++) {
+            if (i > 0) {
+                result = string(abi.encodePacked(result, ","));
+            }
+            result = string(abi.encodePacked(
+                result,
+                '{"id":"', _addressToString(_addresses[i]), '",',
+                '"role":"', _roles[i], '"}'
+            ));
+        }
+        return string(abi.encodePacked(result, "]"));
+    }
+
+    // Helper function to convert address to string
+    function _addressToString(address _addr) internal pure returns (string memory) {
+        bytes32 value = bytes32(uint256(uint160(_addr)));
+        bytes memory alphabet = "0123456789abcdef";
+        bytes memory str = new bytes(42);
+        str[0] = '0';
+        str[1] = 'x';
+        for (uint256 i = 0; i < 20; i++) {
+            str[2+i*2] = alphabet[uint8(value[i + 12] >> 4)];
+            str[3+i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
+        }
+        return string(str);
     }
 
     // Get projects created by a user
@@ -181,65 +158,37 @@ contract ProjectFactory {
         return allProjects.length;
     }
 
-    // Get all templates
-    function getAllTemplates() external view returns (
-        uint256[] memory ids,
-        string[] memory names,
-        string[] memory descriptions,
-        bool[] memory isActiveList
+    // Check if an address is a valid project created by this factory
+    function isValidProject(address _projectAddress) external view returns (bool) {
+        return isProject[_projectAddress];
+    }
+
+    // Get project data from a project address
+    function getProjectData(address _projectAddress) external view returns (string memory) {
+        require(isProject[_projectAddress], "Invalid project address");
+        return JSONProject(_projectAddress).getProjectData();
+    }
+
+    // Get project status from a project address
+    function getProjectStatus(address _projectAddress) external view returns (
+        bool active,
+        uint256 created,
+        uint256 modified,
+        address creator
     ) {
-        uint256 length = templates.length;
-        ids = new uint256[](length);
-        names = new string[](length);
-        descriptions = new string[](length);
-        isActiveList = new bool[](length);
-        
-        for (uint256 i = 0; i < length; i++) {
-            ids[i] = i;
-            names[i] = templates[i].name;
-            descriptions[i] = templates[i].description;
-            isActiveList[i] = templates[i].isActive;
-        }
+        require(isProject[_projectAddress], "Invalid project address");
+        return JSONProject(_projectAddress).getProjectStatus();
     }
 
-    // Get template details
-    function getTemplate(uint256 _templateId) external view returns (
-        string memory name,
-        string memory description,
-        string[] memory availableRoles,
-        string memory defaultOwnerRole,
-        bool isActive
-    ) {
-        require(_templateId < templates.length, "Template does not exist");
-        ProjectTemplate memory template = templates[_templateId];
-        return (template.name, template.description, template.availableRoles, template.defaultOwnerRole, template.isActive);
+    // Update template registry (admin function)
+    function updateTemplateRegistry(address _newTemplateRegistry) external {
+        require(_newTemplateRegistry != address(0), "Template registry address cannot be zero");
+        // Note: In production, this should have access control
+        templateRegistry = ProjectTemplateRegistry(_newTemplateRegistry);
     }
 
-    // Get projects created from a specific template
-    function getProjectsByTemplate(uint256 _templateId) external view returns (address[] memory) {
-        require(_templateId < templates.length, "Template does not exist");
-        return templateProjects[_templateId];
-    }
-
-    // Get template count
-    function getTemplateCount() external view returns (uint256) {
-        return templates.length;
-    }
-
-    // Admin function to create new templates (could be restricted to owner in production)
-    function createTemplate(
-        string memory _name,
-        string memory _description,
-        string[] memory _availableRoles,
-        string memory _defaultOwnerRole
-    ) external returns (uint256) {
-        _createTemplate(_name, _description, _availableRoles, _defaultOwnerRole);
-        return templates.length - 1;
-    }
-
-    // Admin function to deactivate a template
-    function deactivateTemplate(uint256 _templateId) external {
-        require(_templateId < templates.length, "Template does not exist");
-        templates[_templateId].isActive = false;
+    // Get template registry address
+    function getTemplateRegistry() external view returns (address) {
+        return address(templateRegistry);
     }
 }
