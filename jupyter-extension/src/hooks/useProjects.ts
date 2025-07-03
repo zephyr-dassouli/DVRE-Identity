@@ -278,6 +278,12 @@ export const useProjects = () => {
         throw new Error('You already have a pending request for this project');
       }
 
+      // Validate that the requested role is available in the project
+      const availableRoles = await getProjectRoles(projectAddress);
+      if (!availableRoles.includes(role)) {
+        throw new Error(`Role "${role}" is not available for this project. Available roles: ${availableRoles.join(', ')}`);
+      }
+
       // Submit join request to contract
       const tx = await projectContract.submitJoinRequest(role);
       await tx.wait();
@@ -370,13 +376,18 @@ export const useProjects = () => {
         projectData.participants = [];
       }
 
-      // Remove creator from participants if accidentally included
-      projectData.participants = projectData.participants.filter(
-        (p: ProjectMember) => p.address.toLowerCase() !== account?.toLowerCase()
-      );
+      // Ensure roles array exists with default roles if not provided
+      if (!projectData.roles || !Array.isArray(projectData.roles) || projectData.roles.length === 0) {
+        projectData.roles = ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];
+      }
 
-      // Add the creator to participants with a role (commonly "Owner")
       if (account) {
+        // Remove creator from participants if accidentally included
+        projectData.participants = projectData.participants.filter(
+          (p: ProjectMember) => p.address && p.address.toLowerCase() !== account.toLowerCase()
+        );
+
+        // Add the creator to participants with a role (commonly "Owner")
         projectData.participants.push({
           address: account,
           role: "Owner" // Can be configured based on project needs
@@ -430,13 +441,18 @@ export const useProjects = () => {
         projectData.participants = [];
       }
 
-      // Remove creator from participants if accidentally included
-      projectData.participants = projectData.participants.filter(
-        (p: ProjectMember) => p.address.toLowerCase() !== account?.toLowerCase()
-      );
+      // Ensure roles array exists with default roles if not provided
+      if (!projectData.roles || !Array.isArray(projectData.roles) || projectData.roles.length === 0) {
+        projectData.roles = ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];
+      }
 
-      // Add the creator to participants with a role (commonly "Owner")
       if (account) {
+        // Remove creator from participants if accidentally included
+        projectData.participants = projectData.participants.filter(
+          (p: ProjectMember) => p.address && p.address.toLowerCase() !== account.toLowerCase()
+        );
+
+        // Add the creator to participants with a role (commonly "Owner")
         projectData.participants.push({
           address: account,
           role: "Owner" // Can be configured based on project needs
@@ -471,25 +487,20 @@ export const useProjects = () => {
     }
   }, [account, getFactoryContract]);
 
-  // Get project roles (extracted from project data)
+  // Get project roles (from project JSON roles field)
   const getProjectRoles = useCallback(async (projectAddress: string): Promise<string[]> => {
     try {
       const projectInfo = await getProjectInfo(projectAddress);
       if (!projectInfo) return [];
 
-      // Extract unique roles from participants, excluding owner
-      const roles = new Set<string>();
-      projectInfo.participants.forEach(participant => {
-        if (participant.role && participant.role !== 'Owner') {
-          roles.add(participant.role);
-        }
-      });
+      // Get roles from project data roles field
+      if (projectInfo.projectData.roles && Array.isArray(projectInfo.projectData.roles)) {
+        return projectInfo.projectData.roles;
+      }
 
-      // Add common roles if not present
-      const commonRoles = ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];
-      commonRoles.forEach(role => roles.add(role));
-
-      return Array.from(roles);
+      // Fallback to default roles if not defined in project
+      console.warn(`Project ${projectAddress} does not have roles defined, using default roles`);
+      return ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];
     } catch (err) {
       console.error('Failed to get project roles:', err);
       return ['Researcher', 'Data Provider', 'Analyst', 'Contributor'];

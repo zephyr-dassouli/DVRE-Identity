@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useProjects, ProjectTemplate } from '../../hooks/useProjects';
 
-type CreationMode = 'quick' | 'template' | 'custom' | 'custom-builder';
+type CreationMode = 'template' | 'custom' | 'custom-builder';
 
 interface ProjectCreationHubProps {
   onBack: () => void;
@@ -18,7 +18,7 @@ export const ProjectCreationHub: React.FC<ProjectCreationHubProps> = ({
   onBack,
   onSuccess
 }) => {
-  const [creationMode, setCreationMode] = useState<CreationMode>('quick');
+  const [creationMode, setCreationMode] = useState<CreationMode>('template');
   const [selectedTemplate, setSelectedTemplate] = useState<ProjectTemplate | null>(null);
   const { 
     templates, 
@@ -30,9 +30,6 @@ export const ProjectCreationHub: React.FC<ProjectCreationHubProps> = ({
   } = useProjects();
 
   const [formData, setFormData] = useState({
-    projectId: '',
-    objective: '',
-    description: '',
     projectData: ''
   });
 
@@ -48,40 +45,6 @@ export const ProjectCreationHub: React.FC<ProjectCreationHubProps> = ({
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
-
-  const handleQuickCreate = async () => {
-    if (!formData.projectId || !formData.objective) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const projectData = {
-        project_id: formData.projectId,
-        objective: formData.objective,
-        description: formData.description || 'Quick-created project',
-        type: 'general',
-        created_at: new Date().toISOString(),
-      };
-
-      const projectAddress = await createCustomProject(projectData);
-
-      if (projectAddress) {
-        alert(`Project created successfully!\nAddress: ${projectAddress}`);
-        onSuccess();
-      } else {
-        setError('Failed to create project');
-      }
-    } catch (err: any) {
-      console.error('Failed to create project:', err);
-      setError(`Failed to create project: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleTemplateCreate = async () => {
     if (!selectedTemplate || !formData.projectData) {
@@ -271,7 +234,7 @@ export const ProjectCreationHub: React.FC<ProjectCreationHubProps> = ({
           Choose Creation Method
         </h3>
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {(['quick', 'template', 'custom', 'custom-builder'] as const).map(mode => (
+          {(['template', 'custom', 'custom-builder'] as const).map(mode => (
             <button
               key={mode}
               onClick={() => setCreationMode(mode)}
@@ -285,100 +248,13 @@ export const ProjectCreationHub: React.FC<ProjectCreationHubProps> = ({
                 fontSize: '13px'
               }}
             >
-              {mode === 'quick' ? 'Quick Create' : 
-               mode === 'template' ? 'From Template' : 
+              {mode === 'template' ? 'From Template' : 
                mode === 'custom' ? 'Custom JSON' : 
                'Custom Builder'}
             </button>
           ))}
         </div>
       </div>
-
-      {/* Quick Create Form */}
-      {creationMode === 'quick' && (
-        <div style={{ background: 'var(--jp-layout-color2)', padding: '20px', borderRadius: '3px' }}>
-          <h4 style={{ marginBottom: '15px', color: 'var(--jp-ui-font-color1)' }}>Quick Create</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'var(--jp-ui-font-color2)' }}>
-                Project ID *
-              </label>
-              <input
-                type="text"
-                value={formData.projectId}
-                onChange={(e) => setFormData(prev => ({ ...prev, projectId: e.target.value }))}
-                placeholder="e.g., my-research-project"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid var(--jp-border-color1)',
-                  borderRadius: '3px',
-                  background: 'var(--jp-layout-color1)',
-                  color: 'var(--jp-ui-font-color1)',
-                  fontSize: '13px'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'var(--jp-ui-font-color2)' }}>
-                Objective *
-              </label>
-              <input
-                type="text"
-                value={formData.objective}
-                onChange={(e) => setFormData(prev => ({ ...prev, objective: e.target.value }))}
-                placeholder="e.g., Collaborative research on machine learning"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid var(--jp-border-color1)',
-                  borderRadius: '3px',
-                  background: 'var(--jp-layout-color1)',
-                  color: 'var(--jp-ui-font-color1)',
-                  fontSize: '13px'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '5px', color: 'var(--jp-ui-font-color2)' }}>
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Brief description of your project"
-                rows={3}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid var(--jp-border-color1)',
-                  borderRadius: '3px',
-                  background: 'var(--jp-layout-color1)',
-                  color: 'var(--jp-ui-font-color1)',
-                  fontSize: '13px',
-                  resize: 'vertical'
-                }}
-              />
-            </div>
-            <button
-              onClick={handleQuickCreate}
-              disabled={loading}
-              style={{
-                padding: '10px 16px',
-                background: 'var(--jp-brand-color1)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '3px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '13px',
-                opacity: loading ? 0.6 : 1
-              }}
-            >
-              {loading ? 'Creating...' : 'Create Project'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Template Creation */}
       {creationMode === 'template' && (
@@ -484,6 +360,8 @@ export const ProjectCreationHub: React.FC<ProjectCreationHubProps> = ({
                 objective: "Research collaboration",
                 description: "A collaborative research project",
                 type: "research",
+                roles: ["member", "contributor", "reviewer"],
+                participants: []
               }, null, 2)}
               rows={15}
               style={{

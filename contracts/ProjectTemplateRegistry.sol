@@ -58,7 +58,7 @@ contract ProjectTemplateRegistry {
         roles[1] = "aggregator";
         roles[2] = "coordinator";
 
-        string memory exampleJSON = '{"project_id":"fl-cancer-study-01","type":"federated_learning","objective":"Cancer study AI","participants":[{"id":"0xABC","role":"data_owner"},{"id":"0xDEF","role":"aggregator"}],"assets":{"datasets":["ipfs://QmData1","ipfs://QmData2"],"scripts":["ipfs://QmTrainScript"]},"workflow":{"steps":[{"step":"local_training","executor":"0xABC"},{"step":"aggregation","executor":"0xDEF"}]},"policies":{"access":{"0xDEF":["view_results"],"0xABC":["execute_step_1"]}}}';
+        string memory exampleJSON = '{"project_id":"fl-cancer-study-01","type":"federated_learning","objective":"Cancer study AI","roles":["data_owner","aggregator","coordinator"],"participants":[{"id":"0xABC","role":"data_owner"},{"id":"0xDEF","role":"aggregator"}],"assets":{"datasets":["ipfs://QmData1","ipfs://QmData2"],"scripts":["ipfs://QmTrainScript"]},"workflow":{"steps":[{"step":"local_training","executor":"0xABC"},{"step":"aggregation","executor":"0xDEF"}]},"policies":{"access":{"0xDEF":["view_results"],"0xABC":["execute_step_1"]}}}';
 
         uint256 templateId = templates.length;
         templates.push();
@@ -77,6 +77,7 @@ contract ProjectTemplateRegistry {
         template.fields.push(TemplateField("project_id", "string", true, ""));
         template.fields.push(TemplateField("type", "string", true, "federated_learning"));
         template.fields.push(TemplateField("objective", "string", true, ""));
+        template.fields.push(TemplateField("roles", "array", true, '["data_owner","aggregator","coordinator"]'));
         template.fields.push(TemplateField("participants", "array", true, "[]"));
         template.fields.push(TemplateField("assets", "object", true, '{"datasets":[],"scripts":[]}'));
         template.fields.push(TemplateField("workflow", "object", true, '{"steps":[]}'));
@@ -94,7 +95,7 @@ contract ProjectTemplateRegistry {
         roles[1] = "data_consumer";
         roles[2] = "verifier";
 
-        string memory exampleJSON = '{"project_id":"data-share-01","type":"data_sharing","objective":"Medical data sharing","participants":[{"id":"0xABC","role":"data_provider"},{"id":"0xDEF","role":"data_consumer"}],"datasets":["ipfs://QmData1"],"access_policies":{"permissions":{"0xDEF":["read","download"]},"restrictions":{"location":"EU","purpose":"research"}}}';
+        string memory exampleJSON = '{"project_id":"data-share-01","type":"data_sharing","objective":"Medical data sharing","roles":["data_provider","data_consumer","verifier"],"participants":[{"id":"0xABC","role":"data_provider"},{"id":"0xDEF","role":"data_consumer"}],"datasets":["ipfs://QmData1"],"access_policies":{"permissions":{"0xDEF":["read","download"]},"restrictions":{"location":"EU","purpose":"research"}}}';
 
         uint256 templateId = templates.length;
         templates.push();
@@ -113,6 +114,7 @@ contract ProjectTemplateRegistry {
         template.fields.push(TemplateField("project_id", "string", true, ""));
         template.fields.push(TemplateField("type", "string", true, "data_sharing"));
         template.fields.push(TemplateField("objective", "string", true, ""));
+        template.fields.push(TemplateField("roles", "array", true, '["data_provider","data_consumer","verifier"]'));
         template.fields.push(TemplateField("participants", "array", true, "[]"));
         template.fields.push(TemplateField("datasets", "array", true, "[]"));
         template.fields.push(TemplateField("access_policies", "object", true, '{"permissions":{},"restrictions":{}}'));
@@ -129,7 +131,7 @@ contract ProjectTemplateRegistry {
         roles[1] = "reviewer";
         roles[2] = "coordinator";
 
-        string memory exampleJSON = '{"project_id":"research-collab-01","type":"research_collaboration","objective":"Climate change research","participants":[{"id":"0xABC","role":"researcher"},{"id":"0xDEF","role":"reviewer"}],"research_areas":["climate","environment"],"publications":[],"milestones":[{"name":"Data collection","deadline":"2025-12-31","completed":false}]}';
+        string memory exampleJSON = '{"project_id":"research-collab-01","type":"research_collaboration","objective":"Climate change research","roles":["researcher","reviewer","coordinator"],"participants":[{"id":"0xABC","role":"researcher"},{"id":"0xDEF","role":"reviewer"}],"research_areas":["climate","environment"],"publications":[],"milestones":[{"name":"Data collection","deadline":"2025-12-31","completed":false}]}';
 
         uint256 templateId = templates.length;
         templates.push();
@@ -148,6 +150,7 @@ contract ProjectTemplateRegistry {
         template.fields.push(TemplateField("project_id", "string", true, ""));
         template.fields.push(TemplateField("type", "string", true, "research_collaboration"));
         template.fields.push(TemplateField("objective", "string", true, ""));
+        template.fields.push(TemplateField("roles", "array", true, '["researcher","reviewer","coordinator"]'));
         template.fields.push(TemplateField("participants", "array", true, "[]"));
         template.fields.push(TemplateField("research_areas", "array", true, "[]"));
         template.fields.push(TemplateField("publications", "array", false, "[]"));
@@ -160,9 +163,11 @@ contract ProjectTemplateRegistry {
     }
 
     function _createCustomTemplate() internal {
-        string[] memory roles = new string[](0);
+        string[] memory roles = new string[](2);
+        roles[0] = "member";
+        roles[1] = "contributor";
 
-        string memory exampleJSON = '{"project_id":"custom-01","type":"custom","objective":"Custom project","participants":[]}';
+        string memory exampleJSON = '{"project_id":"custom-01","type":"custom","objective":"Custom project","roles":["member","contributor"],"participants":[]}';
 
         uint256 templateId = templates.length;
         templates.push();
@@ -181,6 +186,7 @@ contract ProjectTemplateRegistry {
         template.fields.push(TemplateField("project_id", "string", true, ""));
         template.fields.push(TemplateField("type", "string", true, "custom"));
         template.fields.push(TemplateField("objective", "string", true, ""));
+        template.fields.push(TemplateField("roles", "array", true, '["member","contributor"]'));
         template.fields.push(TemplateField("participants", "array", true, "[]"));
 
         templatesByType["custom"].push(templateId);

@@ -18,7 +18,7 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [showJsonModal, setShowJsonModal] = useState(false);
-    const { getProjectInfo, handleJoinRequest } = useProjects();
+    const { getProjectInfo, handleJoinRequest, getProjectRoles } = useProjects();
     const { account } = useAuth();
 
     // Toggle JSON viewer modal
@@ -39,10 +39,13 @@ export const ProjectDetails: React.FC<ProjectDetailsProps> = ({
             console.log('Project details loaded:', projectDetails);
             
             if (projectDetails) {
+                // Get the actual available roles from the project
+                const actualRoles = await getProjectRoles(projectAddress);
+                
                 // Add availableRoles for ProjectDetails compatibility
                 const detailsWithRoles = {
                     ...projectDetails,
-                    availableRoles: ['Researcher', 'Data Provider', 'Analyst', 'Contributor']
+                    availableRoles: actualRoles
                 };
                 setDetails(detailsWithRoles);
             }
